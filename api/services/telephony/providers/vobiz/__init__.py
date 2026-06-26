@@ -222,12 +222,9 @@ _UI_METADATA_SIP = ProviderUIMetadata(
             required=False,
             description="Default outbound caller ID display name",
         ),
-        ProviderUIField(
-            name="from_numbers",
-            label="Phone Numbers",
-            type="string-array",
-            description="List of phone numbers assigned to this trunk",
-        ),
+        # from_numbers is intentionally excluded from the UI form.
+        # Phone numbers are managed via the dedicated phone-numbers page,
+        # not inside the credentials edit dialog.
     ],
 )
 
