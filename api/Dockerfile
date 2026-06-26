@@ -145,6 +145,7 @@ ENV PYTHONUNBUFFERED=1
 # from a later `RUN chown -R`, which would double the on-disk size of /app).
 COPY --chown=dograh:dograh ./api ./api
 COPY --chown=dograh:dograh ./scripts/start_services_docker.sh ./scripts/start_services_docker.sh
+RUN chmod +x ./scripts/start_services_docker.sh && sed -i 's/\r$//' ./scripts/start_services_docker.sh
 
 # ts_validator Node deps (built in ts-deps stage with full node:22-slim image).
 # The validator runs as a short-lived subprocess from api/mcp_server/ts_bridge.py.
