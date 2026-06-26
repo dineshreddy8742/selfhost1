@@ -1125,7 +1125,9 @@ class ARIManager:
                 ari_endpoint = os.environ.get("ASTERISK_ARI_ENDPOINT", "http://asterisk-ari-proxy:8088")
                 app_name = os.environ.get("ASTERISK_ARI_APP_NAME", "dograh")
                 app_password = os.environ.get("ASTERISK_ARI_PASSWORD", "Reddy@7989")
-                ws_client_name = ""
+                # "dograh" is the websocket_client.conf section name Asterisk uses
+                # to create the chan_websocket connection back to the API.
+                ws_client_name = os.environ.get("ASTERISK_WS_CLIENT_NAME", "dograh")
             else:
                 ari_endpoint = credentials.get("ari_endpoint")
                 app_name = credentials.get("app_name")
