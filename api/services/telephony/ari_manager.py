@@ -52,6 +52,7 @@ class ARIConnection:
         app_name: str,
         app_password: str,
         ws_client_name: str = "",
+        provider: str = "ari",
     ):
         self.organization_id = organization_id
         self.telephony_configuration_id = telephony_configuration_id
@@ -59,6 +60,7 @@ class ARIConnection:
         self.app_name = app_name
         self.app_password = app_password
         self.ws_client_name = ws_client_name
+        self.provider = provider  # e.g. "ari", "vobiz_sip", "twilio_sip"
 
         self._ws: Optional[websockets.ClientConnection] = None
         self._task: Optional[asyncio.Task] = None
@@ -523,7 +525,7 @@ class ARIConnection:
             # 1. Resolve the workflow from the called extension via the
             #    telephony_phone_numbers row scoped to this connection's config.
             phone_row = await db_client.find_active_phone_number_for_inbound(
-                self.organization_id, called_number, "ari"
+                self.organization_id, called_number, self.provider
             )
             if (
                 not phone_row
@@ -1047,6 +1049,7 @@ class ARIManager:
             app_name = config["app_name"]
             app_password = config["app_password"]
             ws_client_name = config["ws_client_name"]
+            provider = config.get("provider", "ari")
 
             conn = ARIConnection(
                 org_id,
@@ -1055,6 +1058,7 @@ class ARIManager:
                 app_name,
                 app_password,
                 ws_client_name,
+                provider=provider,
             )
             key = conn.connection_key
 
@@ -1107,15 +1111,26 @@ class ARIManager:
 
     async def _load_ari_configs(self) -> list:
         """Load all ARI telephony configurations from the multi-config tables."""
+        import os
         rows = await db_client.list_all_telephony_configurations_by_provider("ari")
+        for provider in ["vobiz_sip", "twilio_sip"]:
+            rows.extend(await db_client.list_all_telephony_configurations_by_provider(provider))
 
         configs = []
         for row in rows:
             credentials = row.credentials or {}
-            ari_endpoint = credentials.get("ari_endpoint")
-            app_name = credentials.get("app_name")
-            app_password = credentials.get("app_password")
-            ws_client_name = credentials.get("ws_client_name", "")
+            
+            # If it is a dynamic SIP trunk, it uses the local Asterisk instance
+            if row.provider in ("vobiz_sip", "twilio_sip"):
+                ari_endpoint = os.environ.get("ASTERISK_ARI_ENDPOINT", "http://asterisk-ari-proxy:8088")
+                app_name = os.environ.get("ASTERISK_ARI_APP_NAME", "dograh")
+                app_password = os.environ.get("ASTERISK_ARI_PASSWORD", "Reddy@7989")
+                ws_client_name = ""
+            else:
+                ari_endpoint = credentials.get("ari_endpoint")
+                app_name = credentials.get("app_name")
+                app_password = credentials.get("app_password")
+                ws_client_name = credentials.get("ws_client_name", "")
 
             if not all([ari_endpoint, app_name, app_password]):
                 logger.warning(
@@ -1124,7 +1139,7 @@ class ARIManager:
                 )
                 continue
 
-            if not ws_client_name:
+            if not ws_client_name and row.provider == "ari":
                 logger.warning(
                     f"[ARI Manager] Missing ws_client_name for config {row.id} "
                     f"(org {row.organization_id}), externalMedia WebSocket won't work"
@@ -1138,6 +1153,7 @@ class ARIManager:
                     "app_name": app_name,
                     "app_password": app_password,
                     "ws_client_name": ws_client_name,
+                    "provider": row.provider,
                 }
             )
 
