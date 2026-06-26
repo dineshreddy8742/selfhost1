@@ -128,12 +128,20 @@ services:
 
   api:
     image: ${REGISTRY:-dograhai}/dograh-api:latest
+    build:
+      context: .
+      dockerfile: api/Dockerfile
     volumes:
       - shared-tmp:/tmp
+      - ./config/asterisk/pjsip.d:/etc/asterisk/pjsip.d
     environment:
       # Core application config
       ENVIRONMENT: "${ENVIRONMENT:-local}"
       LOG_LEVEL: "INFO"
+
+      # Asterisk dynamic integration config
+      ASTERISK_CONFIG_DIR: "/etc/asterisk"
+      ASTERISK_ARI_PROXY_URL: "http://ari-proxy:8088"
 
       # Replace this environment variable if you are using a custom
       # domain to host the stack
@@ -240,6 +248,9 @@ services:
 
   ui:
     image: ${REGISTRY:-dograhai}/dograh-ui:latest
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
     environment:
       # Bind the Next.js standalone server to all interfaces
       HOSTNAME: "0.0.0.0"
@@ -278,6 +289,52 @@ services:
     command: tunnel --no-autoupdate --url http://api:8000 --metrics 0.0.0.0:2000
     ports:
       - "2000:2000" # Expose metrics endpoint
+    networks:
+      - app-network
+
+  asterisk:
+    image: andrius/asterisk:latest
+    container_name: asterisk-dograh-gateway
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    volumes:
+      - ./config/asterisk/pjsip.conf:/etc/asterisk/pjsip.conf:ro
+      - ./config/asterisk/ari.conf:/etc/asterisk/ari.conf:ro
+      - ./config/asterisk/http.conf:/etc/asterisk/http.conf:ro
+      - ./config/asterisk/extensions.conf:/etc/asterisk/extensions.conf:ro
+      - ./config/asterisk/websocket_client.conf:/etc/asterisk/websocket_client.conf:ro
+      - ./config/asterisk/modules.conf:/etc/asterisk/modules.conf:ro
+      - ./config/asterisk/manager.conf:/etc/asterisk/manager.conf:ro
+      - ./config/asterisk/pjsip.d:/etc/asterisk/pjsip.d
+    ports:
+      - "5060:5060/udp"
+      - "10000-10099:10000-10099/udp"
+    networks:
+      - app-network
+
+  ari-proxy:
+    image: python:3.10-slim
+    container_name: asterisk-ari-proxy
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    volumes:
+      - ./config/asterisk/ari_proxy.py:/app/ari_proxy.py:ro
+    command: python /app/ari_proxy.py
+    ports:
+      - "8088:8088/tcp"
+    environment:
+      - VOBIZ_DOMAIN=${VOBIZ_DOMAIN:-455bdb01.sip.vobiz.ai}
+      - VOBIZ_CALLERID_NUM=${VOBIZ_CALLERID_NUM:-+918065481144}
+    depends_on:
+      - asterisk
     networks:
       - app-network
 

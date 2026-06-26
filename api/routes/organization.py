@@ -608,6 +608,14 @@ async def create_telephony_configuration(
         },
     )
 
+    if row.provider in ("vobiz_sip", "twilio_sip"):
+        try:
+            from api.services.telephony.sip_sync import write_pjsip_trunk_config, reload_asterisk_pjsip
+            await write_pjsip_trunk_config(row.id, row.provider, row.credentials)
+            await reload_asterisk_pjsip()
+        except Exception as sync_err:
+            logger.error(f"Failed to write PJSIP config for trunk {row.id} on save: {sync_err}")
+
     return _detail_response(row)
 
 
@@ -665,6 +673,14 @@ async def update_telephony_configuration(
         credentials=credentials,
     )
 
+    if row.provider in ("vobiz_sip", "twilio_sip"):
+        try:
+            from api.services.telephony.sip_sync import write_pjsip_trunk_config, reload_asterisk_pjsip
+            await write_pjsip_trunk_config(row.id, row.provider, row.credentials)
+            await reload_asterisk_pjsip()
+        except Exception as sync_err:
+            logger.error(f"Failed to write PJSIP config for trunk {row.id} on update: {sync_err}")
+
     return _detail_response(row)
 
 
@@ -691,6 +707,14 @@ async def delete_telephony_configuration(
     if not user.selected_organization_id:
         raise HTTPException(status_code=400, detail="No organization selected")
 
+    existing = await db_client.get_telephony_configuration_for_org(
+        config_id, user.selected_organization_id
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Telephony configuration not found")
+
+    provider = existing.provider
+
     try:
         deleted = await db_client.delete_telephony_configuration(
             config_id, user.selected_organization_id
@@ -700,6 +724,15 @@ async def delete_telephony_configuration(
 
     if not deleted:
         raise HTTPException(status_code=404, detail="Telephony configuration not found")
+
+    if provider in ("vobiz_sip", "twilio_sip"):
+        try:
+            from api.services.telephony.sip_sync import delete_pjsip_trunk_config, reload_asterisk_pjsip
+            await delete_pjsip_trunk_config(config_id)
+            await reload_asterisk_pjsip()
+        except Exception as sync_err:
+            logger.error(f"Failed to delete PJSIP config for trunk {config_id} on delete: {sync_err}")
+
     return {"message": "Telephony configuration deleted"}
 
 

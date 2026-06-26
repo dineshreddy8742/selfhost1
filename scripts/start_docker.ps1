@@ -211,7 +211,7 @@ Write-Host "Docker registry: $Registry"
 Write-Host "Telemetry enabled: $EnableTelemetry"
 Write-Host ''
 Write-Host 'This will run:'
-Write-Host "  `$env:REGISTRY = '$Registry'; `$env:ENABLE_TELEMETRY = '$EnableTelemetry'; docker compose up --pull always"
+Write-Host "  `$env:REGISTRY = '$Registry'; `$env:ENABLE_TELEMETRY = '$EnableTelemetry'; docker compose up --build"
 Write-Host ''
 
 # $answer = Read-Host 'Start Dograh now? [Y/n]'
@@ -223,7 +223,7 @@ Write-Host ''
 $env:REGISTRY = $Registry
 $env:ENABLE_TELEMETRY = $EnableTelemetry
 Sync-PostgresPassword -Password (Get-DotEnvValue -Path $EnvFile -Key 'POSTGRES_PASSWORD')
-docker compose up --pull always
+docker compose up --build
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }

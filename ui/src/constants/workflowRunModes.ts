@@ -12,7 +12,9 @@ export const WORKFLOW_RUN_MODES = {
     TEXTCHAT: 'textchat',
     ARI: 'ari',
     TELNYX: 'telnyx',
-    PLIVO: 'plivo'
+    PLIVO: 'plivo',
+    VOBIZ_SIP: 'vobiz_sip',
+    TWILIO_SIP: 'twilio_sip'
 } as const;
 
 export type WorkflowRunMode = typeof WORKFLOW_RUN_MODES[keyof typeof WORKFLOW_RUN_MODES];

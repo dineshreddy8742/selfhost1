@@ -31,10 +31,14 @@ from api.services.telephony.providers.telnyx.config import (
 from api.services.telephony.providers.twilio.config import (
     TwilioConfigurationRequest,
     TwilioConfigurationResponse,
+    TwilioSIPConfigurationRequest,
+    TwilioSIPConfigurationResponse,
 )
 from api.services.telephony.providers.vobiz.config import (
     VobizConfigurationRequest,
     VobizConfigurationResponse,
+    VobizSIPConfigurationRequest,
+    VobizSIPConfigurationResponse,
 )
 from api.services.telephony.providers.vonage.config import (
     VonageConfigurationRequest,
@@ -51,7 +55,9 @@ TelephonyConfigRequest = Annotated[
         PlivoConfigurationRequest,
         TelnyxConfigurationRequest,
         TwilioConfigurationRequest,
+        TwilioSIPConfigurationRequest,
         VobizConfigurationRequest,
+        VobizSIPConfigurationRequest,
         VonageConfigurationRequest,
     ],
     Field(discriminator="provider"),
@@ -67,12 +73,15 @@ class TelephonyConfigurationResponse(BaseModel):
     """
 
     twilio: Optional[TwilioConfigurationResponse] = None
+    twilio_sip: Optional[TwilioSIPConfigurationResponse] = None
     plivo: Optional[PlivoConfigurationResponse] = None
     vonage: Optional[VonageConfigurationResponse] = None
     vobiz: Optional[VobizConfigurationResponse] = None
+    vobiz_sip: Optional[VobizSIPConfigurationResponse] = None
     cloudonix: Optional[CloudonixConfigurationResponse] = None
     ari: Optional[ARIConfigurationResponse] = None
     telnyx: Optional[TelnyxConfigurationResponse] = None
+
 
 
 # ---------------------------------------------------------------------------

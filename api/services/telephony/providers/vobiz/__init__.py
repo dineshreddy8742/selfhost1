@@ -15,9 +15,15 @@ from api.services.telephony.registry import (
 )
 from api.utils.common import get_backend_endpoints
 
-from .config import VobizConfigurationRequest, VobizConfigurationResponse
+from .config import (
+    VobizConfigurationRequest,
+    VobizConfigurationResponse,
+    VobizSIPConfigurationRequest,
+    VobizSIPConfigurationResponse,
+)
 from .provider import VobizProvider
 from .transport import create_transport
+from api.services.telephony.providers.sip_trunk_provider import SIPTrunkProvider
 
 VOBIZ_API_BASE_URL = "https://api.vobiz.ai/api"
 
@@ -104,7 +110,7 @@ async def _ensure_application_id(credentials: Dict[str, Any]) -> Dict[str, Any]:
 
 
 _UI_METADATA = ProviderUIMetadata(
-    display_name="Vobiz",
+    display_name="Vobiz (REST API)",
     docs_url="https://docs.dograh.com/integrations/telephony/vobiz",
     fields=[
         ProviderUIField(
@@ -151,14 +157,104 @@ SPEC = ProviderSpec(
     preprocess_credentials_on_save=_ensure_application_id,
 )
 
-
 register(SPEC)
+
+
+# ---------------------------------------------------------------------------
+# Vobiz SIP Trunk Provider Specification
+# ---------------------------------------------------------------------------
+
+class VobizSIPProvider(SIPTrunkProvider):
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config, provider_name="vobiz_sip")
+
+
+def _config_loader_sip(value: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "provider": "vobiz_sip",
+        "config_id": value.get("id"),
+        "sip_domain": value.get("sip_domain"),
+        "username": value.get("username"),
+        "password": value.get("password"),
+        "caller_id_num": value.get("caller_id_num"),
+        "caller_id_name": value.get("caller_id_name"),
+        "from_numbers": value.get("from_numbers", []),
+    }
+
+
+_UI_METADATA_SIP = ProviderUIMetadata(
+    display_name="Vobiz (SIP Trunk)",
+    docs_url="https://docs.dograh.com/integrations/telephony/vobiz",
+    fields=[
+        ProviderUIField(
+            name="sip_domain",
+            label="SIP Domain / Gateway",
+            type="text",
+            required=True,
+            description="Vobiz SIP gateway domain (e.g., your-domain.sip.vobiz.ai)",
+        ),
+        ProviderUIField(
+            name="username",
+            label="SIP Username",
+            type="text",
+            required=True,
+            description="Vobiz SIP credentials username",
+        ),
+        ProviderUIField(
+            name="password",
+            label="SIP Password",
+            type="password",
+            sensitive=True,
+            required=True,
+            description="Vobiz SIP credentials password",
+        ),
+        ProviderUIField(
+            name="caller_id_num",
+            label="Default Caller ID Number",
+            type="text",
+            required=True,
+            description="Default outbound E.164 caller ID (with + prefix)",
+        ),
+        ProviderUIField(
+            name="caller_id_name",
+            label="Default Caller ID Name",
+            type="text",
+            required=False,
+            description="Default outbound caller ID display name",
+        ),
+        ProviderUIField(
+            name="from_numbers",
+            label="Phone Numbers",
+            type="string-array",
+            description="List of phone numbers assigned to this trunk",
+        ),
+    ],
+)
+
+
+SPEC_SIP = ProviderSpec(
+    name="vobiz_sip",
+    provider_cls=VobizSIPProvider,
+    config_loader=_config_loader_sip,
+    transport_factory=create_transport,
+    transport_sample_rate=8000,
+    config_request_cls=VobizSIPConfigurationRequest,
+    ui_metadata=_UI_METADATA_SIP,
+    config_response_cls=VobizSIPConfigurationResponse,
+)
+
+register(SPEC_SIP)
 
 
 __all__ = [
     "SPEC",
+    "SPEC_SIP",
     "VobizConfigurationRequest",
     "VobizConfigurationResponse",
+    "VobizSIPConfigurationRequest",
+    "VobizSIPConfigurationResponse",
     "VobizProvider",
+    "VobizSIPProvider",
     "create_transport",
 ]
+

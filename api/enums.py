@@ -54,12 +54,15 @@ class WorkflowRunMode(Enum):
     WEBRTC = "webrtc"
     SMALLWEBRTC = "smallwebrtc"
     TEXTCHAT = "textchat"
+    VOBIZ_SIP = "vobiz_sip"
+    TWILIO_SIP = "twilio_sip"
 
     # Historical, not used anymore. Don't
     # use and don't remove
     STASIS = "stasis"
     VOICE = "VOICE"
     CHAT = "CHAT"
+
 
 
 class StorageBackend(Enum):

@@ -68,7 +68,16 @@ async def lifespan(app: FastAPI):
         await sync_manager.start()
         set_worker_sync_manager(sync_manager)
 
+        # Synchronize dynamic SIP trunks with Asterisk config
+        try:
+            import asyncio
+            from api.services.telephony.sip_sync import sync_sip_trunks
+            asyncio.create_task(sync_sip_trunks())
+        except Exception as e:
+            logger.error(f"Failed to trigger SIP trunk synchronization: {e}")
+
         yield  # Run app
+
 
         # Shutdown sequence - this runs when FastAPI is shutting down
         logger.info("Starting graceful shutdown...")
