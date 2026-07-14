@@ -235,3 +235,187 @@ class DailyReportService:
             )
 
         return detailed_runs
+
+    async def get_daily_runs_excel(
+        self,
+        organization_id: int,
+        date: str,
+        timezone: str,
+        workflow_id: Optional[int] = None,
+    ) -> bytes:
+        """
+        Get daily runs and export them as an Excel workbook (.xlsx).
+        """
+        import openpyxl
+        from io import BytesIO
+        from api.utils.artifacts import artifact_url
+        from api.utils.transcript import generate_transcript_text
+
+        # Parse date and timezone
+        tz = ZoneInfo(timezone)
+        date_obj = datetime.strptime(date, "%Y-%m-%d")
+
+        # Create start and end datetime in the specified timezone
+        start_dt = datetime.combine(date_obj, time.min, tzinfo=tz)
+        end_dt = datetime.combine(date_obj, time.max, tzinfo=tz)
+
+        # Convert to UTC for database queries
+        start_utc = start_dt.astimezone(ZoneInfo("UTC"))
+        end_utc = end_dt.astimezone(ZoneInfo("UTC"))
+
+        # Fetch the detailed runs with full fields (logs, access token etc)
+        runs = await db_client.get_workflow_runs_for_excel_report(
+            organization_id=organization_id,
+            start_utc=start_utc,
+            end_utc=end_utc,
+            workflow_id=workflow_id,
+        )
+
+        # Create virtual Excel workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Call Reports"
+
+        # Headers
+        headers = [
+            "Name",
+            "Number",
+            "Call Type",
+            "Disposition",
+            "Status",
+            "Duration (seconds)",
+            "Call Tags",
+            "Recording URL",
+            "Recording Transcript URL",
+            "Full Recording Text"
+        ]
+        ws.append(headers)
+
+        # Format column widths and wrap text for transcript
+        ws.column_dimensions['A'].width = 20  # Name
+        ws.column_dimensions['B'].width = 15  # Number
+        ws.column_dimensions['C'].width = 15  # Call Type
+        ws.column_dimensions['D'].width = 18  # Disposition
+        ws.column_dimensions['E'].width = 15  # Status
+        ws.column_dimensions['F'].width = 18  # Duration
+        ws.column_dimensions['G'].width = 20  # Call Tags
+        ws.column_dimensions['H'].width = 40  # Rec URL
+        ws.column_dimensions['I'].width = 40  # Transcript URL
+        ws.column_dimensions['J'].width = 60  # Full Recording Text
+
+        from openpyxl.styles import Alignment, Font
+
+        # Header style
+        header_font = Font(name="Calibri", size=11, bold=True)
+        for col_num in range(1, 11):
+            cell = ws.cell(row=1, column=col_num)
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+
+        # Add data rows
+        for run in runs:
+            # 1. Name
+            initial = run.get("initial_context") or {}
+            name = initial.get("name") or initial.get("customer_name") or initial.get("first_name", "")
+            if initial.get("last_name"):
+                name = f"{name} {initial.get('last_name')}".strip()
+            if not name:
+                name = "N/A"
+
+            # 2. Number & Call Type
+            call_type = run.get("call_type") or initial.get("direction") or "outbound"
+            caller_number = initial.get("caller_number")
+            called_number = initial.get("called_number") or initial.get("phone_number")
+            if call_type == "inbound":
+                number = caller_number
+            else:
+                number = initial.get("phone_number") or called_number
+
+            # 3. Disposition
+            disposition = None
+            if run.get("gathered_context"):
+                disposition = run.get("gathered_context", {}).get("mapped_call_disposition")
+            if not disposition and run.get("logs"):
+                logs_field = run.get("logs")
+                callbacks = []
+                if isinstance(logs_field, dict):
+                    callbacks = logs_field.get("telephony_status_callbacks", [])
+                elif isinstance(logs_field, list):
+                    for item in logs_field:
+                        if isinstance(item, dict) and "telephony_status_callbacks" in item:
+                            callbacks = item.get("telephony_status_callbacks", [])
+                            break
+                if callbacks and isinstance(callbacks, list):
+                    disposition = callbacks[-1].get("status")
+            if not disposition:
+                disposition = run.get("state") or ""
+
+            # 4. Duration
+            duration_str = run.get("usage_info", {}).get("call_duration_seconds", "0")
+            try:
+                duration = float(duration_str)
+            except (ValueError, TypeError):
+                duration = 0.0
+
+            # 5. Status (Received / Not Received)
+            disposition_lower = disposition.lower()
+            is_received = False
+            if duration > 0:
+                is_received = True
+            elif disposition_lower in (
+                "completed",
+                "answered",
+                "user_hangup",
+                "agent_hangup",
+                "call_duration_exceeded",
+                "user_qualified",
+                "transfer_call",
+            ):
+                is_received = True
+            status = "Received" if is_received else "Not Received"
+
+            # 6. Tags
+            tags = ""
+            if run.get("gathered_context"):
+                call_tags = run.get("gathered_context", {}).get("call_tags", [])
+                if isinstance(call_tags, list):
+                    tags = ", ".join(str(t) for t in call_tags)
+
+            # 7 & 8. URLs
+            token = run.get("public_access_token")
+            rec_url = artifact_url(token, "recording") or ""
+            transcript_url = artifact_url(token, "transcript") or ""
+
+            # 9. Full Recording Text
+            logs = run.get("logs") or {}
+            if isinstance(logs, dict):
+                events = logs.get("realtime_feedback_events") or []
+                transcript_text = generate_transcript_text(events)
+            elif isinstance(logs, list):
+                transcript_text = generate_transcript_text(logs)
+            else:
+                transcript_text = ""
+
+            ws.append([
+                name,
+                number,
+                call_type,
+                disposition,
+                status,
+                duration,
+                tags,
+                rec_url,
+                transcript_url,
+                transcript_text
+            ])
+
+            # Apply alignment (wrap text for full recording text)
+            row_idx = ws.max_row
+            ws.cell(row=row_idx, column=10).alignment = Alignment(wrap_text=True, vertical="top")
+
+        # Write workbook to bytes
+        bytes_io = BytesIO()
+        wb.save(bytes_io)
+        bytes_io.seek(0)
+        return bytes_io.getvalue()
+
