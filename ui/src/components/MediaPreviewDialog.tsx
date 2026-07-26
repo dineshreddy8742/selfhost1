@@ -48,13 +48,17 @@ export function MediaPreviewDialog() {
             if (transcriptResult) {
                 try {
                     const response = await fetch(transcriptResult);
-                    const text = await response.text();
-                    setTranscriptContent(text);
-                    posthog.capture(PostHogEvent.TRANSCRIPT_VIEWED, {
-                        run_id: runId,
-                        source: 'media_preview_dialog',
-                        transcript_length: text.length,
-                    });
+                    if (response.ok) {
+                        const text = await response.text();
+                        if (!text.trim().startsWith('<?xml') && !text.trim().startsWith('<Error>')) {
+                            setTranscriptContent(text);
+                            posthog.capture(PostHogEvent.TRANSCRIPT_VIEWED, {
+                                run_id: runId,
+                                source: 'media_preview_dialog',
+                                transcript_length: text.length,
+                            });
+                        }
+                    }
                 } catch (error) {
                     console.error('Error fetching transcript:', error);
                 }

@@ -85,6 +85,11 @@ class UserConfigurationValidator:
                     configuration.realtime, "realtime", required=True
                 )
             )
+            status_list.extend(
+                self._validate_service(
+                    configuration.stt, "stt", required=False
+                )
+            )
         else:
             status_list.extend(self._validate_service(configuration.stt, "stt"))
             status_list.extend(self._validate_service(configuration.tts, "tts"))

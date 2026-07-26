@@ -14,7 +14,8 @@ export const WORKFLOW_RUN_MODES = {
     TELNYX: 'telnyx',
     PLIVO: 'plivo',
     VOBIZ_SIP: 'vobiz_sip',
-    TWILIO_SIP: 'twilio_sip'
+    TWILIO_SIP: 'twilio_sip',
+    PLIVO_SIP: 'plivo_sip'
 } as const;
 
 export type WorkflowRunMode = typeof WORKFLOW_RUN_MODES[keyof typeof WORKFLOW_RUN_MODES];

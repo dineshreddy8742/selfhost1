@@ -103,6 +103,7 @@ def build_realtime_pipeline(
     pipeline_engine_callback_processor,
     pipeline_metrics_aggregator,
     voicemail_detector=None,
+    stt=None,
 ):
     """Build a pipeline for realtime (speech-to-speech) LLM services.
 
@@ -131,9 +132,13 @@ def build_realtime_pipeline(
     """
     processors = [
         transport.input(),
+    ]
+    if stt:
+        processors.append(stt)
+    processors.extend([
         user_context_aggregator,
         realtime_llm,
-    ]
+    ])
 
     if voicemail_detector:
         logger.info("Adding native voicemail detector to realtime pipeline")

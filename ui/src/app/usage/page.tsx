@@ -167,7 +167,7 @@ export default function UsagePage() {
         }
     }, [auth.isAuthenticated, localTimezone]);
 
-    // Download a CSV of all runs matching the current filters.
+    // Download an Excel workbook of all runs matching the current filters.
     const handleDownloadReport = async () => {
         if (!auth.isAuthenticated) return;
         setIsDownloadingReport(true);
@@ -182,7 +182,7 @@ export default function UsagePage() {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'usage_runs_report.csv';
+                a.download = 'usage_runs_report.xlsx';
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
@@ -472,6 +472,7 @@ export default function UsagePage() {
                                                 <TableHead className="font-semibold">Call Type</TableHead>
                                                 <TableHead className="font-semibold">Phone Number</TableHead>
                                                 <TableHead className="font-semibold">Disposition</TableHead>
+                                                <TableHead className="font-semibold">Intent</TableHead>
                                                 <TableHead className="font-semibold">Date</TableHead>
                                                 <TableHead className="font-semibold text-right">Duration</TableHead>
                                                 {organizationPricing?.price_per_second_usd && (
@@ -504,6 +505,27 @@ export default function UsagePage() {
                                                         {run.disposition ? (
                                                             <Badge variant="default">
                                                                 {run.disposition}
+                                                            </Badge>
+                                                        ) : (
+                                                            <span className="text-sm text-muted-foreground">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {run.user_intent === 'Interested' ? (
+                                                            <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25">
+                                                                Interested
+                                                            </Badge>
+                                                        ) : run.user_intent === 'Not Interested' ? (
+                                                            <Badge className="bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25">
+                                                                Not Interested
+                                                            </Badge>
+                                                        ) : run.user_intent === 'Neutral' ? (
+                                                            <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/25">
+                                                                Neutral
+                                                            </Badge>
+                                                        ) : run.user_intent ? (
+                                                            <Badge variant="outline" className="text-muted-foreground">
+                                                                {run.user_intent}
                                                             </Badge>
                                                         ) : (
                                                             <span className="text-sm text-muted-foreground">-</span>

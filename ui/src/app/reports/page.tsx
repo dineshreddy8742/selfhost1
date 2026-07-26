@@ -4,6 +4,7 @@ import { addDays, format, subDays } from 'date-fns';
 import { Calendar, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { client } from '@/client/client.gen';
 import {
   getDailyReportApiV1OrganizationsReportsDailyGet,
   getDailyRunsDetailApiV1OrganizationsReportsDailyRunsGet,
@@ -195,6 +196,51 @@ export default function ReportsPage() {
     }
   };
 
+  const handleDownloadExcel = async () => {
+    if (!auth.isAuthenticated) return;
+
+    try {
+      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      const workflowId = selectedWorkflow === 'all' ? '' : selectedWorkflow;
+      const accessToken = await auth.getAccessToken();
+
+      const queryParams = new URLSearchParams({
+        date: dateStr,
+        timezone,
+        ...(workflowId && { workflow_id: workflowId })
+      });
+
+      const baseUrl = client.getConfig().baseUrl || window.location.origin;
+      const response = await fetch(`${baseUrl}/api/v1/organizations/reports/daily/runs/excel?${queryParams.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to download Excel file');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      const workflowName = selectedWorkflow === 'all'
+        ? 'all_workflows'
+        : workflows.find(w => w.id.toString() === selectedWorkflow)?.name?.replace(/\s+/g, '_') || 'workflow';
+
+      link.setAttribute('download', `workflow_runs_${dateStr}_${workflowName}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download Excel:', err);
+      alert('Failed to download Excel data');
+    }
+  };
+
   const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
 
   return (
@@ -270,17 +316,28 @@ export default function ReportsPage() {
           )}
         </div>
 
-        {/* Download CSV Button */}
+        {/* Download CSV & Excel Buttons */}
         {!loading && report && report.metrics.total_runs > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadCSV}
-            className="flex items-center gap-2"
-          >
-            <Download className="h-4 w-4" />
-            Download CSV
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadCSV}
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Download CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadExcel}
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Download Excel
+            </Button>
+          </div>
         )}
       </div>
 

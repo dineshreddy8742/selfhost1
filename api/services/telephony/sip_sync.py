@@ -5,7 +5,7 @@ import aiohttp
 from sqlalchemy import select
 from loguru import logger
 
-from api.db.base_client import db_client
+from api.db import db_client
 from api.db.models import TelephonyConfigurationModel
 
 ASTERISK_CONFIG_DIR = os.environ.get("ASTERISK_CONFIG_DIR", "/etc/asterisk")
@@ -53,8 +53,9 @@ async def write_pjsip_trunk_config(config_id: int, provider: str, credentials: d
         logger.warning(f"Config {config_id} is missing sip_domain, username, or password. Cannot write PJSIP config.")
         return False
 
-    config_content = f"""; Dynamic PJSIP configuration for {provider} Trunk {config_id}
-[reg_{config_id}]
+    reg_block = ""
+    if provider != "plivo_sip":
+        reg_block = f"""[reg_{config_id}]
 type=registration
 transport=transport-udp
 outbound_auth=auth_{config_id}
@@ -62,7 +63,10 @@ server_uri=sip:{sip_domain}
 client_uri=sip:{username}@{sip_domain}
 retry_interval=60
 
-[auth_{config_id}]
+"""
+
+    config_content = f"""; Dynamic PJSIP configuration for {provider} Trunk {config_id}
+{reg_block}[auth_{config_id}]
 type=auth
 auth_type=userpass
 username={username}
@@ -120,7 +124,7 @@ async def sync_sip_trunks() -> None:
         async with db_client.async_session() as session:
             result = await session.execute(
                 select(TelephonyConfigurationModel).where(
-                    TelephonyConfigurationModel.provider.in_(["vobiz_sip", "twilio_sip"])
+                    TelephonyConfigurationModel.provider.in_(["vobiz_sip", "twilio_sip", "plivo_sip"])
                 )
             )
             rows = result.scalars().all()

@@ -291,6 +291,7 @@ def convert_legacy_ai_model_configuration_to_v2(
                     realtime=configuration.realtime,
                     llm=configuration.llm,
                     embeddings=configuration.embeddings,
+                    stt=configuration.stt,
                 ),
             ),
         )
@@ -340,7 +341,7 @@ def _merge_byok_secret_fields(incoming_byok: dict | None, existing_byok: dict | 
     section_names = (
         ("llm", "tts", "stt", "embeddings")
         if incoming_mode == "pipeline"
-        else ("realtime", "llm", "embeddings")
+        else ("realtime", "llm", "embeddings", "stt")
     )
     incoming_container = incoming_byok.get(incoming_mode)
     existing_container = existing_byok.get(existing_mode)

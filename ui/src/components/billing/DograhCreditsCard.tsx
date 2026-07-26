@@ -47,9 +47,9 @@ export function DograhCreditsCard() {
   return (
     <Card className="mb-6">
       <CardHeader>
-        <CardTitle>Dograh Model Credits</CardTitle>
+        <CardTitle>Dailsmart Model Credits</CardTitle>
         <CardDescription>
-          These track usage of Dograh models using Dograh Service Keys.
+          These track usage of Dailsmart models using Dailsmart Service Keys.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -83,7 +83,7 @@ export function DograhCreditsCard() {
           </div>
         ) : (
           <p className="text-muted-foreground">
-            No Dograh service keys configured. Set up a service key in your model configuration to see usage.
+            No Dailsmart service keys configured. Set up a service key in your model configuration to see usage.
           </p>
         )}
 

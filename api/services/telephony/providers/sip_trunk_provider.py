@@ -31,7 +31,8 @@ class SIPTrunkProvider(ARIProvider):
         self.config_id = config.get("config_id")
         self.sip_domain = config.get("sip_domain")
         self.username = config.get("username")
-        self.caller_id_num = config.get("caller_id_num")
+        caller_id = config.get("caller_id_num")
+        self.caller_id_num = "".join(caller_id.split()) if isinstance(caller_id, str) else caller_id
         self.caller_id_name = config.get("caller_id_name", "")
 
     async def initiate_call(
@@ -51,8 +52,14 @@ class SIPTrunkProvider(ARIProvider):
 
         endpoint = f"{self.base_url}/channels"
 
-        # clean numbers
+        # clean numbers and extract raw digits if full PJSIP or SIP URI is passed
         to_clean = to_number.strip()
+        if "/" in to_clean or "@" in to_clean or "sip:" in to_clean.lower():
+            resource = to_clean.split("/")[-1] if "/" in to_clean else to_clean
+            number_part = resource.split("@")[0] if "@" in resource else resource
+            if number_part.lower().startswith("sip:"):
+                number_part = number_part[4:]
+            to_clean = "".join(c for c in number_part if c.isdigit() or c == "+")
         
         # Route to default outbound context in Asterisk (extensions.conf)
         local_endpoint = f"Local/{to_clean}@default"
@@ -78,16 +85,17 @@ class SIPTrunkProvider(ARIProvider):
         # Send trunk details as channel variables so extensions.conf can read them
         body = {
             "variables": {
-                "TRUNK_ID": str(self.config_id),
-                "CALLER_ID_NUM": self.caller_id_num,
-                "CALLER_ID_NAME": self.caller_id_name or "",
-                "SIP_DOMAIN": self.sip_domain
+                "_TRUNK_ID": str(self.config_id),
+                "_CALLER_ID_NUM": self.caller_id_num,
+                "_CALLER_ID_NAME": self.caller_id_name or "",
+                "_SIP_DOMAIN": self.sip_domain,
+                "_WORKFLOW_RUN_ID": str(workflow_run_id) if workflow_run_id else "",
             }
         }
 
         logger.info(
             f"[{self.provider_name.upper()} SIP] Placing call to {to_clean} via local Asterisk "
-            f"using Trunk ID: {self.config_id}"
+            f"using Trunk ID: {self.config_id}. Params: {params}, Body: {body}"
         )
 
         async with aiohttp.ClientSession() as session:
@@ -113,6 +121,16 @@ class SIPTrunkProvider(ARIProvider):
                 channel_id = response_data.get("id", "")
 
                 logger.info(f"[{self.provider_name.upper()} SIP] Asterisk channel created: {channel_id}")
+
+                if workflow_run_id:
+                    try:
+                        import redis.asyncio as aioredis
+                        from api.constants import REDIS_URL
+                        r = await aioredis.from_url(REDIS_URL, decode_responses=True)
+                        await r.set(f"ari:channel:{channel_id}", str(workflow_run_id), ex=3600)
+                        logger.info(f"[{self.provider_name.upper()} SIP] Stored Redis mapping: channel {channel_id} -> run {workflow_run_id}")
+                    except Exception as e:
+                        logger.error(f"[{self.provider_name.upper()} SIP] Failed to store channel run mapping in Redis: {e}")
 
                 return CallInitiationResult(
                     call_id=channel_id,

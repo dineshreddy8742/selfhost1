@@ -147,13 +147,18 @@ def create_stt_service(
     logger.info(
         f"Creating STT service: provider={user_config.stt.provider}, model={user_config.stt.model}"
     )
+    # Force the STT service's sample rate to match the pipeline sample rate
+    # since it processes frames at the internal pipeline rate.
+    import copy
+    audio_config = copy.copy(audio_config)
+    audio_config.transport_in_sample_rate = audio_config.pipeline_sample_rate
     if user_config.stt.provider == ServiceProviders.DEEPGRAM.value:
         if user_config.stt.model in DEEPGRAM_FLUX_MODELS:
             settings_kwargs = {
                 "model": user_config.stt.model,
-                "eot_timeout_ms": 3000,
-                "eot_threshold": 0.7,
-                "eager_eot_threshold": 0.5,
+                "eot_timeout_ms": 500,  # 500ms — down from 3000ms for instant turn detection
+                "eot_threshold": 0.6,
+                "eager_eot_threshold": 0.4,
                 "keyterm": keyterms or [],
             }
             if user_config.stt.model == "flux-general-multi":
@@ -178,7 +183,7 @@ def create_stt_service(
             settings=DeepgramSTTSettings(
                 language=language,
                 profanity_filter=False,
-                endpointing=100,
+                endpointing=50,  # 50ms — faster endpointing for instant response
                 model=user_config.stt.model,
                 keyterm=keyterms or [],
             ),
@@ -227,9 +232,9 @@ def create_stt_service(
             # same language hint subset as Deepgram Flux multilingual.
             settings_kwargs = {
                 "model": "flux-general-multi",
-                "eot_timeout_ms": 3000,
-                "eot_threshold": 0.7,
-                "eager_eot_threshold": 0.5,
+                "eot_timeout_ms": 500,  # 500ms — down from 3000ms for instant turn detection
+                "eot_threshold": 0.6,
+                "eager_eot_threshold": 0.4,
                 "keyterm": keyterms or [],
             }
             language_hint = DEEPGRAM_FLUX_LANGUAGE_HINTS.get(language)
@@ -956,12 +961,17 @@ def create_realtime_llm_service(user_config, audio_config: "AudioConfig"):
         from api.services.pipecat.realtime.gemini_live import (
             DograhGeminiLiveLLMService,
         )
+        from pipecat.services.google.gemini_live.llm import GeminiVADParams
+        from google.genai.types import StartSensitivity
 
         # Gemini Live enables input/output audio transcription by default
         # in its _connect() method — no need to configure it explicitly.
         settings_kwargs = {
             "model": model,
             "voice": voice or "Puck",
+            "vad": GeminiVADParams(
+                start_sensitivity=StartSensitivity.START_SENSITIVITY_LOW
+            ),
         }
         if language:
             settings_kwargs["language"] = language
@@ -973,6 +983,8 @@ def create_realtime_llm_service(user_config, audio_config: "AudioConfig"):
         from api.services.pipecat.realtime.gemini_live_vertex import (
             DograhGeminiLiveVertexLLMService,
         )
+        from pipecat.services.google.gemini_live.llm import GeminiVADParams
+        from google.genai.types import StartSensitivity
 
         project_id = getattr(realtime_config, "project_id", None)
         location = getattr(realtime_config, "location", None) or "us-east4"
@@ -981,6 +993,9 @@ def create_realtime_llm_service(user_config, audio_config: "AudioConfig"):
         settings_kwargs = {
             "model": model,
             "voice": voice or "Charon",
+            "vad": GeminiVADParams(
+                start_sensitivity=StartSensitivity.START_SENSITIVITY_LOW
+            ),
         }
         if language:
             settings_kwargs["language"] = language

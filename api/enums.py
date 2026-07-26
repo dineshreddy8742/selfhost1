@@ -56,6 +56,7 @@ class WorkflowRunMode(Enum):
     TEXTCHAT = "textchat"
     VOBIZ_SIP = "vobiz_sip"
     TWILIO_SIP = "twilio_sip"
+    PLIVO_SIP = "plivo_sip"
 
     # Historical, not used anymore. Don't
     # use and don't remove

@@ -505,3 +505,181 @@ async def test_migrate_model_configuration_v2_initializes_hosted_mps_billing(
     )
     sync_posthog_billing.assert_called_once_with(42, uses_mps_billing_v2=True)
     assert response == expected_response
+
+
+def test_legacy_byok_realtime_converts_to_byok_v2_and_preserves_stt():
+    legacy = EffectiveAIModelConfiguration(
+        is_realtime=True,
+        realtime=GoogleRealtimeLLMConfiguration(
+            provider="google_realtime",
+            api_key="realtime-key",
+            model="gemini-3.1-flash-live-preview",
+            voice="Puck",
+            language="en",
+        ),
+        llm=OpenAILLMService(
+            provider="openai",
+            api_key="sk-llm",
+            model="gpt-4.1",
+        ),
+        stt=DeepgramSTTConfiguration(
+            provider="deepgram",
+            api_key="dg-stt",
+            model="nova-3-general",
+        ),
+    )
+
+    config = convert_legacy_ai_model_configuration_to_v2(legacy)
+
+    assert config.mode == "byok"
+    assert config.byok.mode == "realtime"
+    assert config.byok.realtime.realtime.provider == "google_realtime"
+    assert config.byok.realtime.llm.provider == "openai"
+    assert config.byok.realtime.stt is not None
+    assert config.byok.realtime.stt.provider == "deepgram"
+    assert config.byok.realtime.stt.api_key == "dg-stt"
+
+
+def test_masked_realtime_stt_key_is_preserved_when_saving():
+    existing = OrganizationAIModelConfigurationV2(
+        mode="byok",
+        byok={
+            "mode": "realtime",
+            "realtime": {
+                "realtime": {
+                    "provider": "google_realtime",
+                    "api_key": "google-realtime-key",
+                    "model": "gemini-3.1-flash-live-preview",
+                    "voice": "Puck",
+                    "language": "en",
+                },
+                "llm": {
+                    "provider": "openai",
+                    "api_key": "sk-llm-secret",
+                    "model": "gpt-4.1",
+                },
+                "stt": {
+                    "provider": "deepgram",
+                    "api_key": "dg-stt-secret",
+                    "model": "nova-3-general",
+                },
+            },
+        },
+    )
+    incoming = OrganizationAIModelConfigurationV2(
+        mode="byok",
+        byok={
+            "mode": "realtime",
+            "realtime": {
+                "realtime": {
+                    "provider": "google_realtime",
+                    "api_key": "google-realtime-key",
+                    "model": "gemini-3.1-flash-live-preview",
+                    "voice": "Puck",
+                    "language": "en",
+                },
+                "llm": {
+                    "provider": "openai",
+                    "api_key": mask_key("sk-llm-secret"),
+                    "model": "gpt-4.1",
+                },
+                "stt": {
+                    "provider": "deepgram",
+                    "api_key": mask_key("dg-stt-secret"),
+                    "model": "nova-3-general",
+                },
+            },
+        },
+    )
+
+    merged = merge_ai_model_configuration_v2_secrets(incoming, existing)
+
+    assert merged.byok.realtime.llm.api_key == "sk-llm-secret"
+    assert merged.byok.realtime.stt.api_key == "dg-stt-secret"
+    check_for_masked_keys_in_ai_model_configuration_v2(merged)
+
+
+@pytest.mark.asyncio
+async def test_byok_realtime_validator_validates_stt_optionally():
+    from unittest.mock import patch
+
+    config_invalid = OrganizationAIModelConfigurationV2.model_validate(
+        {
+            "mode": "byok",
+            "byok": {
+                "mode": "realtime",
+                "realtime": {
+                    "realtime": {
+                        "provider": "google_realtime",
+                        "api_key": "google-realtime-key",
+                        "model": "gemini-3.1-flash-live-preview",
+                        "voice": "Puck",
+                        "language": "en",
+                    },
+                    "llm": {
+                        "provider": "google",
+                        "api_key": "google-llm-key",
+                        "model": "gemini-2.5-flash",
+                    },
+                    "stt": {
+                        "provider": "deepgram",
+                        "api_key": "",
+                        "model": "nova-3-general",
+                    },
+                },
+            },
+        }
+    )
+    effective_invalid = compile_ai_model_configuration_v2(config_invalid)
+
+    with pytest.raises(ValueError) as exc_info:
+        await UserConfigurationValidator().validate(effective_invalid)
+
+    assert exc_info.value.args[0] == [
+        {
+            "model": "stt",
+            "message": (
+                "Invalid Deepgram API key. The key was rejected by the Deepgram API. "
+                "Please check that your API key is correct and active. "
+                "You can verify your keys at https://console.deepgram.com/."
+            ),
+        }
+    ]
+
+    config_valid = OrganizationAIModelConfigurationV2.model_validate(
+        {
+            "mode": "byok",
+            "byok": {
+                "mode": "realtime",
+                "realtime": {
+                    "realtime": {
+                        "provider": "google_realtime",
+                        "api_key": "google-realtime-key",
+                        "model": "gemini-3.1-flash-live-preview",
+                        "voice": "Puck",
+                        "language": "en",
+                    },
+                    "llm": {
+                        "provider": "google",
+                        "api_key": "google-llm-key",
+                        "model": "gemini-2.5-flash",
+                    },
+                    "stt": {
+                        "provider": "deepgram",
+                        "api_key": "dg-valid-key",
+                        "model": "nova-3-general",
+                    },
+                },
+            },
+        }
+    )
+    effective_valid = compile_ai_model_configuration_v2(config_valid)
+
+    with patch.object(
+        UserConfigurationValidator,
+        "_check_deepgram_api_key",
+        return_value=True,
+    ):
+        assert await UserConfigurationValidator().validate(effective_valid) == {
+            "status": [{"model": "all", "message": "ok"}]
+        }

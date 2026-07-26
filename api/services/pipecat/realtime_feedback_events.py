@@ -159,5 +159,5 @@ def stamp_realtime_feedback_event(
 
 
 def realtime_feedback_event_sort_key(event: dict[str, Any]) -> str:
-    payload_timestamp = (event.get("payload") or {}).get("timestamp")
-    return payload_timestamp or event.get("timestamp") or ""
+    return event.get("timestamp") or ""
+

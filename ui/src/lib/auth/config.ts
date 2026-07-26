@@ -10,6 +10,7 @@ export interface StackConfig {
 interface ResolvedAuthConfig {
   authProvider: string;
   stackConfig: StackConfig | null;
+  googleClientId: string | null;
 }
 
 let cachedConfig: ResolvedAuthConfig | null = null;
@@ -30,7 +31,7 @@ async function resolveAuthConfig(): Promise<ResolvedAuthConfig> {
   try {
     const backendUrl = getServerBackendUrl();
     const res = await fetch(`${backendUrl}/api/v1/health`, {
-      next: { revalidate: 300 },
+      cache: "no-store",
     });
     if (res.ok) {
       const data = await res.json();
@@ -45,7 +46,8 @@ async function resolveAuthConfig(): Promise<ResolvedAuthConfig> {
                 data.stack_publishable_client_key as string,
             }
           : null;
-      cachedConfig = { authProvider, stackConfig };
+      const googleClientId = (data.google_client_id as string) || null;
+      cachedConfig = { authProvider, stackConfig, googleClientId };
       return cachedConfig;
     }
   } catch {
@@ -56,7 +58,7 @@ async function resolveAuthConfig(): Promise<ResolvedAuthConfig> {
   // do NOT cache it: caching here would pin the entire UI to local auth until a
   // container restart if the first resolution loses the startup race with the api
   // service. Leaving it uncached means the next request retries and self-heals.
-  return { authProvider: "local", stackConfig: null };
+  return { authProvider: "local", stackConfig: null, googleClientId: null };
 }
 
 /**
@@ -72,4 +74,12 @@ export async function getAuthProvider(): Promise<string> {
  */
 export async function getStackConfig(): Promise<StackConfig | null> {
   return (await resolveAuthConfig()).stackConfig;
+}
+
+/**
+ * Returns the Google Client ID configured on the backend, or null.
+ * Server-only — the browser receives this via /api/config/auth.
+ */
+export async function getGoogleClientId(): Promise<string | null> {
+  return (await resolveAuthConfig()).googleClientId;
 }

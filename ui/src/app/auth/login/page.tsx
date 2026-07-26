@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { loginApiV1AuthLoginPost } from "@/client/sdk.gen";
 import { AuthEnterpriseCTA } from "@/components/auth/AuthEnterpriseCTA";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,18 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/config/auth")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.googleClientId) {
+          setGoogleClientId(data.googleClientId);
+        }
+      })
+      .catch((err) => console.error("Failed to load auth config:", err));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +95,10 @@ export default function LoginPage() {
           {loading ? "Signing in..." : "Sign in"}
         </Button>
       </form>
+
+      {googleClientId && (
+        <GoogleSignInButton googleClientId={googleClientId} />
+      )}
 
       <p className="text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}

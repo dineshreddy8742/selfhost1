@@ -5,14 +5,12 @@ def create_deploy_zip():
     project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     zip_path = os.path.join(project_dir, 'deploy.zip')
     
-    # Files and folders to include
     includes = [
         'api',
         'ui',
         'config',
         'scripts',
         'docs',
-        'pipecat',
         'deploy',
         'docker-compose.yaml',
         'remote_up.sh',

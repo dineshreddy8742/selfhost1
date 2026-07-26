@@ -152,7 +152,7 @@ class CircuitBreakerConfigResponse(BaseModel):
 class CreateCampaignRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     workflow_id: int
-    source_type: str = Field(..., pattern="^csv$")
+    source_type: str = Field(..., pattern="^(csv|excel)$")
     source_id: str  # CSV file key
     # Optional during the legacy → multi-config migration window. Required in
     # a follow-up. When omitted, the dispatcher falls back to the org's
@@ -942,11 +942,11 @@ async def get_campaign_source_download_url(
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # Only generate download URL for CSV files
-    if campaign.source_type != "csv":
+    # Only generate download URL for CSV/Excel files
+    if campaign.source_type not in ("csv", "excel"):
         raise HTTPException(
             status_code=400,
-            detail=f"Download URL only available for CSV sources. This campaign uses {campaign.source_type}",
+            detail=f"Download URL only available for CSV and Excel sources. This campaign uses {campaign.source_type}",
         )
 
     # Verify the file key belongs to the user's organization

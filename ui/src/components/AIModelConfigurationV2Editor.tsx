@@ -118,6 +118,7 @@ function byokConfigToLegacyShape(config: Record<string, unknown> | null): Record
             realtime: realtime?.realtime,
             llm: realtime?.llm,
             embeddings: realtime?.embeddings,
+            stt: realtime?.stt,
         };
     }
 
@@ -338,6 +339,7 @@ export function AIModelConfigurationV2Editor({
         const isRealtime = Boolean(config.is_realtime);
         const llm = requireByokService(config, "llm", defaultsForByok);
         const embeddings = optionalByokService(config, "embeddings");
+        const stt = optionalByokService(config, "stt");
         const body: OrganizationAiModelConfigurationV2 = {
             version: 2,
             mode: "byok",
@@ -348,6 +350,7 @@ export function AIModelConfigurationV2Editor({
                         realtime: requireByokService(config, "realtime", defaultsForByok) as never,
                         llm: llm as never,
                         ...(embeddings ? { embeddings: embeddings as never } : {}),
+                        ...(stt ? { stt: stt as never } : {}),
                     },
                 }
                 : {
@@ -375,7 +378,7 @@ export function AIModelConfigurationV2Editor({
             <Tabs value={mode} onValueChange={(value) => setMode(value as ModelMode)} className="space-y-6">
                 <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="realtime">Speech to Speech</TabsTrigger>
-                    <TabsTrigger value="dograh">Dograh</TabsTrigger>
+                    <TabsTrigger value="dograh">Dailsmart</TabsTrigger>
                     <TabsTrigger value="byok">BYOK</TabsTrigger>
                 </TabsList>
 

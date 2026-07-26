@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from api.db.models import UserModel
@@ -130,3 +131,47 @@ async def get_daily_runs_detail(
         return [WorkflowRunDetail(**run) for run in runs]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/daily/runs/excel")
+async def get_daily_runs_excel(
+    date: str = Query(..., description="Date in YYYY-MM-DD format"),
+    timezone: str = Query(..., description="IANA timezone (e.g., 'America/New_York')"),
+    workflow_id: Optional[int] = Query(
+        None, description="Optional workflow ID to filter by"
+    ),
+    user: UserModel = Depends(get_user),
+) -> StreamingResponse:
+    """
+    Get detailed workflow runs for the specified date in Excel format.
+    """
+    import io
+
+    if not user.selected_organization_id:
+        raise HTTPException(status_code=400, detail="No organization selected")
+
+    # Validate date format
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail="Invalid date format. Use YYYY-MM-DD"
+        )
+
+    report_service = DailyReportService()
+
+    try:
+        excel_bytes = await report_service.get_daily_runs_excel(
+            organization_id=user.selected_organization_id,
+            date=date,
+            timezone=timezone,
+            workflow_id=workflow_id,
+        )
+        return StreamingResponse(
+            io.BytesIO(excel_bytes),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=daily_runs_{date}.xlsx"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { signupApiV1AuthSignupPost } from "@/client/sdk.gen";
 import { AuthEnterpriseCTA } from "@/components/auth/AuthEnterpriseCTA";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,18 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/config/auth")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.googleClientId) {
+          setGoogleClientId(data.googleClientId);
+        }
+      })
+      .catch((err) => console.error("Failed to load auth config:", err));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +52,7 @@ export default function SignupPage() {
 
       if (res.error || !res.data) {
         const detail = (res.error as { detail?: string })?.detail;
-        toast.error(detail || "Signup failed");
+        toast.error(detail || "Signup failed. Please try again.");
         return;
       }
 
@@ -51,11 +64,13 @@ export default function SignupPage() {
       });
 
       window.location.href = "/after-sign-in";
-    } catch {
-      toast.error("An error occurred. Please try again.");
+    } catch (err: any) {
+      const msg = err?.message || err?.detail || "An error occurred. Please try again.";
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
+
   };
 
   return (
@@ -105,6 +120,10 @@ export default function SignupPage() {
           {loading ? "Creating account..." : "Create account"}
         </Button>
       </form>
+
+      {googleClientId && (
+        <GoogleSignInButton googleClientId={googleClientId} />
+      )}
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}

@@ -59,6 +59,39 @@ export interface WorkflowRunsTableProps {
     emptyMessage?: string;
 }
 
+const getCallStatusBadge = (run: WorkflowRunResponseSchema) => {
+    if (run.is_completed) {
+        const disposition = run.gathered_context?.mapped_call_disposition;
+        if (disposition === 'no-answer') {
+            return <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none">No Answer</Badge>;
+        }
+        if (disposition === 'busy') {
+            return <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none">Busy</Badge>;
+        }
+        if (disposition === 'canceled') {
+            return <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none">Canceled</Badge>;
+        }
+        if (disposition === 'failed' || disposition === 'error') {
+            return <Badge variant="destructive">Failed</Badge>;
+        }
+        return <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white border-none">Completed</Badge>;
+    }
+
+    const callbacks = run.logs?.telephony_status_callbacks;
+    if (Array.isArray(callbacks) && callbacks.length > 0) {
+        const latestCallback = callbacks[callbacks.length - 1];
+        const status = latestCallback?.status;
+        if (status === 'ringing') {
+            return <Badge className="bg-blue-500 hover:bg-blue-600 text-white border-none animate-pulse">Ringing</Badge>;
+        }
+        if (status === 'answered' || status === 'in-progress') {
+            return <Badge className="bg-indigo-500 hover:bg-indigo-600 text-white border-none animate-pulse">In Call</Badge>;
+        }
+    }
+
+    return <Badge variant="secondary">In Progress</Badge>;
+};
+
 export function WorkflowRunsTable({
     runs,
     loading,
@@ -172,11 +205,28 @@ export function WorkflowRunsTable({
                                             </div>
                                         </TableHead>
                                         <TableHead className="font-semibold">Disposition</TableHead>
+                                        <TableHead className="font-semibold">Intent</TableHead>
                                         <TableHead className="font-semibold">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {runs.map((run) => (
+                                    {runs.map((run) => {
+                                        const gc = run.gathered_context || {};
+                                        const explicitIntent = (gc.user_intent || gc.intent || gc.interest_level || gc.interest) as string | undefined;
+                                        let detectedIntent = explicitIntent;
+                                        if (!detectedIntent) {
+                                            if (gc.user_qualified === true || gc.mapped_call_disposition === 'user_qualified') {
+                                                detectedIntent = 'Interested';
+                                            } else if (gc.user_qualified === false || gc.mapped_call_disposition === 'disqualified') {
+                                                detectedIntent = 'Not Interested';
+                                            } else if (['busy', 'no-answer', 'failed', 'canceled'].includes((gc.mapped_call_disposition as string || '').toLowerCase())) {
+                                                detectedIntent = 'Not Connected';
+                                            } else if (run.is_completed) {
+                                                detectedIntent = 'Neutral';
+                                            }
+                                        }
+
+                                        return (
                                         <TableRow
                                             key={run.id}
                                             className={`cursor-pointer hover:bg-muted/50 ${selectedRowId === run.id ? "bg-primary/20 ring-1 ring-primary/50" : ""}`}
@@ -184,9 +234,7 @@ export function WorkflowRunsTable({
                                         >
                                             <TableCell className="font-mono text-sm">#{run.id}</TableCell>
                                             <TableCell>
-                                                <Badge variant={run.is_completed ? "default" : "secondary"}>
-                                                    {run.is_completed ? "Completed" : "In Progress"}
-                                                </Badge>
+                                                {getCallStatusBadge(run)}
                                             </TableCell>
                                             <TableCell className="text-sm">{formatDate(run.created_at)}</TableCell>
                                             <TableCell>
@@ -201,6 +249,27 @@ export function WorkflowRunsTable({
                                                 {run.gathered_context?.mapped_call_disposition ? (
                                                     <Badge variant="default">
                                                         {run.gathered_context.mapped_call_disposition as string}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-sm text-muted-foreground">-</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                {detectedIntent === 'Interested' ? (
+                                                    <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25">
+                                                        Interested
+                                                    </Badge>
+                                                ) : detectedIntent === 'Not Interested' ? (
+                                                    <Badge className="bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25">
+                                                        Not Interested
+                                                    </Badge>
+                                                ) : detectedIntent === 'Neutral' ? (
+                                                    <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/25">
+                                                        Neutral
+                                                    </Badge>
+                                                ) : detectedIntent ? (
+                                                    <Badge variant="outline" className="text-muted-foreground">
+                                                        {detectedIntent}
                                                     </Badge>
                                                 ) : (
                                                     <span className="text-sm text-muted-foreground">-</span>

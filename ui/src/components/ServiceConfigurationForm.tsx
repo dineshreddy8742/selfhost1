@@ -67,6 +67,7 @@ const STANDARD_TABS: { key: ServiceSegment; label: string }[] = [
 
 const REALTIME_TABS: { key: ServiceSegment; label: string }[] = [
     { key: "realtime", label: "Realtime Model" },
+    { key: "stt", label: "Transcriber" },
     { key: "llm", label: "LLM" },
     { key: "embeddings", label: "Embedding" },
 ];
@@ -79,6 +80,7 @@ const OVERRIDE_STANDARD_TABS: { key: ServiceSegment; label: string }[] = [
 
 const OVERRIDE_REALTIME_TABS: { key: ServiceSegment; label: string }[] = [
     { key: "realtime", label: "Realtime Model" },
+    { key: "stt", label: "Transcriber" },
     { key: "llm", label: "LLM" },
 ];
 
@@ -476,7 +478,7 @@ export function ServiceConfigurationForm({
             if (mode === 'override') {
                 // Build model_overrides for enabled services only
                 const modelOverrides: Record<string, unknown> = {};
-                const services = isRealtime ? ["realtime", "llm"] : ["llm", "tts", "stt"];
+                const services = isRealtime ? ["realtime", "stt", "llm"] : ["llm", "tts", "stt"];
                 for (const svc of services) {
                     if (enabledOverrides[svc]) {
                         modelOverrides[svc] = buildServiceConfig(svc as ServiceSegment, data);

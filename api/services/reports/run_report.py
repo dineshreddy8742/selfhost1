@@ -143,7 +143,7 @@ async def generate_usage_runs_report_excel(
     """
     import openpyxl
     from io import BytesIO
-    from api.utils.transcript import generate_transcript_text
+    from api.utils.transcript import detect_user_intent, generate_transcript_text
     from api.utils.artifacts import artifact_url
     from openpyxl.styles import Alignment, Font
 
@@ -164,6 +164,7 @@ async def generate_usage_runs_report_excel(
         "Number",
         "Call Type",
         "Disposition",
+        "Intent",
         "Status",
         "Duration (seconds)",
         "Call Tags",
@@ -177,15 +178,16 @@ async def generate_usage_runs_report_excel(
     ws.column_dimensions['B'].width = 15  # Number
     ws.column_dimensions['C'].width = 15  # Call Type
     ws.column_dimensions['D'].width = 18  # Disposition
-    ws.column_dimensions['E'].width = 15  # Status
-    ws.column_dimensions['F'].width = 18  # Duration
-    ws.column_dimensions['G'].width = 20  # Call Tags
-    ws.column_dimensions['H'].width = 40  # Rec URL
-    ws.column_dimensions['I'].width = 40  # Transcript URL
-    ws.column_dimensions['J'].width = 60  # Full Recording Text
+    ws.column_dimensions['E'].width = 16  # Intent
+    ws.column_dimensions['F'].width = 15  # Status
+    ws.column_dimensions['G'].width = 18  # Duration
+    ws.column_dimensions['H'].width = 20  # Call Tags
+    ws.column_dimensions['I'].width = 40  # Rec URL
+    ws.column_dimensions['J'].width = 40  # Transcript URL
+    ws.column_dimensions['K'].width = 60  # Full Recording Text
 
     header_font = Font(name="Calibri", size=11, bold=True)
-    for col_num in range(1, 11):
+    for col_num in range(1, 12):
         cell = ws.cell(row=1, column=col_num)
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center")
@@ -274,11 +276,20 @@ async def generate_usage_runs_report_excel(
         else:
             transcript_text = ""
 
+        # 9. Intent Detection
+        intent = detect_user_intent(
+            gathered_context=run.gathered_context,
+            transcript_text=transcript_text,
+            disposition=disposition,
+            duration=duration,
+        )
+
         ws.append([
             name,
             number,
             call_type,
             disposition,
+            intent,
             status,
             duration,
             tags,
@@ -289,7 +300,7 @@ async def generate_usage_runs_report_excel(
 
         # Apply alignment (wrap text for full recording text)
         row_idx = ws.max_row
-        ws.cell(row=row_idx, column=10).alignment = Alignment(wrap_text=True, vertical="top")
+        ws.cell(row=row_idx, column=11).alignment = Alignment(wrap_text=True, vertical="top")
 
     bytes_io = BytesIO()
     wb.save(bytes_io)

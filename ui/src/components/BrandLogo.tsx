@@ -1,11 +1,5 @@
 import { cn } from "@/lib/utils";
 
-// Reusable Dograh wordmark. Theme-aware by default: the dark logo shows on light
-// surfaces and the light/cream logo shows on dark. Pass `inverse` to force the
-// light logo on an always-dark surface (e.g. the auth brand panel). Pass `mark`
-// to render the square logo mark instead of the full wordmark (e.g. the app
-// sidebar header). Height is controlled by the caller via className (e.g.
-// "h-7"); width stays auto so each lockup keeps its aspect ratio.
 export function BrandLogo({
   className,
   inverse = false,
@@ -15,24 +9,26 @@ export function BrandLogo({
   inverse?: boolean;
   mark?: boolean;
 }) {
+  const logoColor = inverse ? "text-white" : "text-foreground";
+  
   if (mark) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src="/dograh-mark.png" alt="Dograh" className={cn("w-auto select-none", className)} />
+      <div className={cn("flex items-center gap-1.5", className)}>
+        <svg className="h-6 w-6 text-cta" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2v20M17 5v14M22 9v6M7 5v14M2 9v6" />
+        </svg>
+      </div>
     );
   }
-  if (inverse) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src="/dograh-logo-inverse.png" alt="Dograh" className={cn("w-auto select-none", className)} />
-    );
-  }
+
   return (
-    <>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/dograh-logo.png" alt="Dograh" className={cn("block w-auto select-none dark:hidden", className)} />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/dograh-logo-inverse.png" alt="Dograh" className={cn("hidden w-auto select-none dark:block", className)} />
-    </>
+    <div className={cn("flex items-center gap-2 font-bold tracking-tight select-none", className)}>
+      <svg className="h-6 w-6 text-cta animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2v20M17 5v14M22 9v6M7 5v14M2 9v6" />
+      </svg>
+      <span className={cn("text-lg font-extrabold tracking-tight", logoColor)}>
+        Dailsmart <span className="text-cta">AI</span>
+      </span>
+    </div>
   );
 }

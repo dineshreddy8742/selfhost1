@@ -77,6 +77,7 @@ class HealthResponse(BaseModel):
     # be baked into the browser bundle at build time. Both are public values.
     stack_project_id: str | None = None
     stack_publishable_client_key: str | None = None
+    google_client_id: str | None = None
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -88,6 +89,7 @@ async def health() -> HealthResponse:
         FORCE_TURN_RELAY,
         STACK_AUTH_PROJECT_ID,
         STACK_PUBLISHABLE_CLIENT_KEY,
+        GOOGLE_CLIENT_ID,
         TURN_SECRET,
     )
     from api.utils.common import get_backend_endpoints
@@ -107,4 +109,5 @@ async def health() -> HealthResponse:
         stack_publishable_client_key=(
             STACK_PUBLISHABLE_CLIENT_KEY if is_stack else None
         ),
+        google_client_id=GOOGLE_CLIENT_ID,
     )

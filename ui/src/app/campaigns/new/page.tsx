@@ -38,7 +38,7 @@ export default function NewCampaignPage() {
     // Form state
     const [campaignName, setCampaignName] = useState('');
     const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>('');
-    const [sourceType, setSourceType] = useState<'csv'>('csv');
+    const [sourceType, setSourceType] = useState<'csv' | 'excel'>('csv');
     const [sourceId, setSourceId] = useState('');
     const [selectedFileName, setSelectedFileName] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -472,7 +472,7 @@ export default function NewCampaignPage() {
                                 <Select
                                     value={sourceType}
                                     onValueChange={(value) => {
-                                        setSourceType(value as 'csv');
+                                        setSourceType(value as 'csv' | 'excel');
                                         setSourceId('');
                                         setSelectedFileName('');
                                     }}
@@ -483,6 +483,7 @@ export default function NewCampaignPage() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="csv">CSV File</SelectItem>
+                                        <SelectItem value="excel">Excel Sheet (.xlsx, .xls)</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <p className="text-sm text-muted-foreground">

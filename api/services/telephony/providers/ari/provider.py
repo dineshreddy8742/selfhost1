@@ -139,6 +139,16 @@ class ARIProvider(TelephonyProvider):
                     f"state={response_data.get('state')}"
                 )
 
+                if workflow_run_id:
+                    try:
+                        import redis.asyncio as aioredis
+                        from api.constants import REDIS_URL
+                        r = await aioredis.from_url(REDIS_URL, decode_responses=True)
+                        await r.set(f"ari:channel:{channel_id}", str(workflow_run_id), ex=3600)
+                        logger.info(f"[ARI] Stored Redis mapping: channel {channel_id} -> run {workflow_run_id}")
+                    except Exception as e:
+                        logger.error(f"[ARI] Failed to store channel run mapping in Redis: {e}")
+
                 return CallInitiationResult(
                     call_id=channel_id,
                     status=response_data.get("state", "created"),

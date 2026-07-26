@@ -36,6 +36,7 @@ AUTH_PROVIDER = os.getenv("AUTH_PROVIDER", "local")
 # needs them baked into the bundle at build time.
 STACK_AUTH_PROJECT_ID = os.getenv("STACK_AUTH_PROJECT_ID")
 STACK_PUBLISHABLE_CLIENT_KEY = os.getenv("STACK_PUBLISHABLE_CLIENT_KEY")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 DOGRAH_MPS_SECRET_KEY = os.getenv("DOGRAH_MPS_SECRET_KEY", None)
 MPS_API_URL = os.getenv("MPS_API_URL", "https://services.dograh.com")
 

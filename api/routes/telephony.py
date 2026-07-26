@@ -1050,3 +1050,54 @@ def _mount_provider_routers() -> None:
 
 
 _mount_provider_routers()
+
+
+@router.post("/internal/dial-status")
+@router.get("/internal/dial-status")
+async def internal_dial_status(workflow_run_id: int, dial_status: str):
+    """Internal endpoint called by Asterisk dialplan via CURL after Dial() completes.
+
+    Maps Asterisk DIALSTATUS values to call dispositions and marks
+    unanswered outbound runs as completed so they don't stay as 'initialized'.
+    This is only called when the call was NOT answered (ANSWER is excluded by dialplan).
+    """
+    # Map Asterisk DIALSTATUS to our disposition
+    status_map = {
+        "NOANSWER": "no_answer",
+        "BUSY": "busy",
+        "CANCEL": "canceled",
+        "CONGESTION": "failed",
+        "CHANUNAVAIL": "failed",
+        "DONTCALL": "rejected",
+        "TORTURE": "rejected",
+        "INVALIDARGS": "failed",
+    }
+    disposition = status_map.get(dial_status.upper(), "no_answer")
+
+    logger.info(
+        f"[DialStatus] Run {workflow_run_id}: DIALSTATUS={dial_status} -> disposition={disposition}"
+    )
+
+    try:
+        workflow_run = await db_client.get_workflow_run_by_id(workflow_run_id)
+        if workflow_run and not workflow_run.is_completed:
+            ctx = workflow_run.gathered_context or {}
+            ctx["call_disposition"] = disposition
+            ctx["mapped_call_disposition"] = disposition
+            await db_client.update_workflow_run(
+                run_id=workflow_run_id,
+                is_completed=True,
+                state=WorkflowRunState.COMPLETED.value,
+                gathered_context=ctx,
+            )
+            logger.info(
+                f"[DialStatus] Run {workflow_run_id} marked COMPLETED with disposition={disposition}"
+            )
+        else:
+            logger.info(
+                f"[DialStatus] Run {workflow_run_id} already completed or not found, skipping update"
+            )
+    except Exception as e:
+        logger.error(f"[DialStatus] Error updating run {workflow_run_id}: {e}")
+
+    return {"ok": True}

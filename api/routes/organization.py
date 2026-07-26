@@ -608,7 +608,7 @@ async def create_telephony_configuration(
         },
     )
 
-    if row.provider in ("vobiz_sip", "twilio_sip"):
+    if row.provider in ("vobiz_sip", "twilio_sip", "plivo_sip"):
         try:
             from api.services.telephony.sip_sync import write_pjsip_trunk_config, reload_asterisk_pjsip
             await write_pjsip_trunk_config(row.id, row.provider, row.credentials)
@@ -673,7 +673,7 @@ async def update_telephony_configuration(
         credentials=credentials,
     )
 
-    if row.provider in ("vobiz_sip", "twilio_sip"):
+    if row.provider in ("vobiz_sip", "twilio_sip", "plivo_sip"):
         try:
             from api.services.telephony.sip_sync import write_pjsip_trunk_config, reload_asterisk_pjsip
             await write_pjsip_trunk_config(row.id, row.provider, row.credentials)
@@ -725,7 +725,7 @@ async def delete_telephony_configuration(
     if not deleted:
         raise HTTPException(status_code=404, detail="Telephony configuration not found")
 
-    if provider in ("vobiz_sip", "twilio_sip"):
+    if provider in ("vobiz_sip", "twilio_sip", "plivo_sip"):
         try:
             from api.services.telephony.sip_sync import delete_pjsip_trunk_config, reload_asterisk_pjsip
             await delete_pjsip_trunk_config(config_id)

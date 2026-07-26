@@ -30,3 +30,8 @@ class UserResponse(BaseModel):
 class AuthResponse(BaseModel):
     token: str
     user: UserResponse
+
+
+class GoogleLoginRequest(BaseModel):
+    credential: str
+

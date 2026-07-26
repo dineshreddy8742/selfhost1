@@ -25,7 +25,7 @@ from loguru import logger
 
 from api.constants import REDIS_URL
 from api.db import db_client
-from api.enums import CallType, WorkflowRunMode
+from api.enums import CallType, WorkflowRunMode, WorkflowRunState
 from api.services.quota_service import authorize_workflow_run_start
 from api.services.telephony.call_transfer_manager import get_call_transfer_manager
 from api.services.telephony.transfer_event_protocol import (
@@ -306,21 +306,35 @@ class ARIConnection:
             app_args = event.get("args", [])
             caller = channel.get("caller", {})
             logger.info(
-                f"[ARI org={self.organization_id}] StasisStart: "
+                f"[ARI org={self.organization_id} config={self.telephony_configuration_id} provider={self.provider}] StasisStart: "
                 f"channel={channel_id}, state={channel_state}, "
                 f"caller={caller.get('number', 'unknown')}, "
                 f"args={app_args}"
             )
 
-            if channel_state == "Ring":
-                # Inbound call — arrived from outside, not yet answered
-                asyncio.create_task(
-                    self._handle_inbound_stasis_start(channel_id, channel_state, event)
-                )
-            else:
-                # Outbound call (state == "Up") — originated by us
-                # Check if this is a transfer destination channel (app_args starts with "transfer")
-                # Transfer destinations run externally - we only track status to publish transfer event, not run the pipeline
+            # Always parse args first — outbound Local channels enter Stasis in
+            # "Ring" state (not "Up"), so we can't rely on state alone to decide
+            # whether a call is inbound or outbound.
+            args_dict = {}
+            for arg in app_args:
+                for pair in arg.split(","):
+                    if "=" in pair:
+                        key, value = pair.split("=", 1)
+                        args_dict[key.strip()] = value.strip()
+
+            workflow_run_id_from_args = args_dict.get("workflow_run_id")
+            workflow_id_from_args = args_dict.get("workflow_id")
+            user_id_from_args = args_dict.get("user_id")
+
+            is_outbound_with_args = (
+                workflow_run_id_from_args
+                and workflow_id_from_args
+                and user_id_from_args
+            )
+
+            if is_outbound_with_args:
+                # Outbound call — originated by us (Local channel via SIP trunk)
+                # Check if this is a transfer destination channel
                 transfer_id = self._get_transfer_id(app_args)
                 if transfer_id:
                     logger.info(
@@ -332,29 +346,47 @@ class ARIConnection:
                     )
                     return
 
-                # Parse args to extract workflow context
-                args_dict = {}
-                for arg in app_args:
-                    for pair in arg.split(","):
-                        if "=" in pair:
-                            key, value = pair.split("=", 1)
-                            args_dict[key.strip()] = value.strip()
+                logger.info(
+                    f"[ARI org={self.organization_id}] Outbound Local channel in Stasis "
+                    f"(state={channel_state}): run={workflow_run_id_from_args}"
+                )
+                # Start pipeline connection in background task
+                asyncio.create_task(
+                    self._handle_stasis_start(
+                        channel_id, channel_state, workflow_run_id_from_args,
+                        workflow_id_from_args, user_id_from_args
+                    )
+                )
+            elif channel_state == "Ring":
+                # Inbound call — arrived from outside, not yet answered
+                asyncio.create_task(
+                    self._handle_inbound_stasis_start(channel_id, channel_state, event)
+                )
+            else:
+                # Outbound call (state == "Up") with no args — check for transfer
+                transfer_id = self._get_transfer_id(app_args)
+                if transfer_id:
+                    logger.info(
+                        f"[ARI org={self.organization_id}] Transfer destination answered: "
+                        f"channel={channel_id}, transfer_id={transfer_id}"
+                    )
+                    asyncio.create_task(
+                        self._handle_destination_answered(transfer_id, channel_id)
+                    )
+                    return
 
-                workflow_run_id = args_dict.get("workflow_run_id")
-                workflow_id = args_dict.get("workflow_id")
-                user_id = args_dict.get("user_id")
-
-                if not workflow_run_id or not workflow_id or not user_id:
+                if not workflow_run_id_from_args or not workflow_id_from_args or not user_id_from_args:
                     logger.warning(
                         f"[ARI org={self.organization_id}] StasisStart missing required args: "
-                        f"workflow_run_id={workflow_run_id}, workflow_id={workflow_id}, user_id={user_id}"
+                        f"workflow_run_id={workflow_run_id_from_args}, workflow_id={workflow_id_from_args}, user_id={user_id_from_args}"
                     )
                     return
 
                 # Start pipeline connection in background task
                 asyncio.create_task(
                     self._handle_stasis_start(
-                        channel_id, channel_state, workflow_run_id, workflow_id, user_id
+                        channel_id, channel_state, workflow_run_id_from_args,
+                        workflow_id_from_args, user_id_from_args
                     )
                 )
 
@@ -382,6 +414,46 @@ class ARIConnection:
                 f"[ARI org={self.organization_id}] ChannelDestroyed: "
                 f"channel={channel_id}, cause={cause} ({cause_txt}), tech_cause = {tech_cause}"
             )
+
+            # Retrieve workflow run mapping from Redis
+            workflow_run_id = await self._get_channel_run(channel_id)
+            if workflow_run_id:
+                try:
+                    workflow_run = await db_client.get_workflow_run_by_id(int(workflow_run_id))
+                    if workflow_run and not workflow_run.is_completed:
+                        # Map Asterisk hangup causes to call dispositions
+                        disposition = "no_answer"
+                        if cause == 17 or tech_cause == "486":
+                            disposition = "busy"
+                        elif cause == 16 or tech_cause == "487" or tech_cause == "603":
+                            disposition = "canceled"
+                        elif cause == 21:
+                            disposition = "rejected"
+                        elif cause > 0 and cause != 16:
+                            disposition = "failed"
+                        
+                        logger.info(
+                            f"[ARI org={self.organization_id}] Channel destroyed before answering. "
+                            f"Updating run {workflow_run_id} to COMPLETED with disposition {disposition}"
+                        )
+                        ctx = workflow_run.gathered_context or {}
+                        ctx["mapped_call_disposition"] = disposition
+                        ctx["call_disposition"] = disposition
+                        
+                        await db_client.update_workflow_run(
+                            run_id=int(workflow_run_id),
+                            is_completed=True,
+                            state=WorkflowRunState.COMPLETED.value,
+                            gathered_context=ctx
+                        )
+                except Exception as db_err:
+                    logger.error(
+                        f"[ARI org={self.organization_id}] Error updating run status on ChannelDestroyed "
+                        f"for run {workflow_run_id}: {db_err}"
+                    )
+                
+                # Cleanup reverse mapping key
+                await self._delete_channel_run(channel_id)
 
             # Check if this is a transfer destination that failed
             transfer_id = await self._get_transfer_id_for_channel(channel_id)
@@ -1113,7 +1185,7 @@ class ARIManager:
         """Load all ARI telephony configurations from the multi-config tables."""
         import os
         rows = await db_client.list_all_telephony_configurations_by_provider("ari")
-        for provider in ["vobiz_sip", "twilio_sip"]:
+        for provider in ["vobiz_sip", "twilio_sip", "plivo_sip"]:
             rows.extend(await db_client.list_all_telephony_configurations_by_provider(provider))
 
         configs = []
@@ -1121,7 +1193,7 @@ class ARIManager:
             credentials = row.credentials or {}
             
             # If it is a dynamic SIP trunk, it uses the local Asterisk instance
-            if row.provider in ("vobiz_sip", "twilio_sip"):
+            if row.provider in ("vobiz_sip", "twilio_sip", "plivo_sip"):
                 ari_endpoint = os.environ.get("ASTERISK_ARI_ENDPOINT", "http://asterisk-ari-proxy:8088")
                 app_name = os.environ.get("ASTERISK_ARI_APP_NAME", "dograh")
                 app_password = os.environ.get("ASTERISK_ARI_PASSWORD", "Reddy@7989")

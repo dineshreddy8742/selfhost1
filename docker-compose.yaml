@@ -216,6 +216,7 @@ services:
       FORCE_TURN_RELAY: "${FORCE_TURN_RELAY:-false}"
 
       OSS_JWT_SECRET: "${OSS_JWT_SECRET:?OSS_JWT_SECRET must be set to a strong secret}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
 
       # Telemetry
       ENABLE_TELEMETRY: "${ENABLE_TELEMETRY:-true}"

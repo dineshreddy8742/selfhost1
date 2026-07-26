@@ -24,6 +24,7 @@ from .config import (
 from .provider import VobizProvider
 from .transport import create_transport
 from api.services.telephony.providers.sip_trunk_provider import SIPTrunkProvider
+from api.services.telephony.providers.ari.transport import create_transport as create_ari_transport
 
 VOBIZ_API_BASE_URL = "https://api.vobiz.ai/api"
 
@@ -233,7 +234,7 @@ SPEC_SIP = ProviderSpec(
     name="vobiz_sip",
     provider_cls=VobizSIPProvider,
     config_loader=_config_loader_sip,
-    transport_factory=create_transport,
+    transport_factory=create_ari_transport,
     transport_sample_rate=8000,
     config_request_cls=VobizSIPConfigurationRequest,
     ui_metadata=_UI_METADATA_SIP,

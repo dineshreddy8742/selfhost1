@@ -12,7 +12,10 @@ from api.db import db_client
 from api.db.models import UserModel
 from api.services.auth.depends import get_user, get_user_with_selected_organization
 from api.services.mps_service_key_client import mps_service_key_client
-from api.services.reports import generate_usage_runs_report_csv
+from api.services.reports import (
+    generate_usage_runs_report_csv,
+    generate_usage_runs_report_excel,
+)
 from api.utils.artifacts import artifact_url
 from api.utils.recording_artifacts import has_recording_track
 
@@ -117,6 +120,7 @@ class WorkflowRunUsageResponse(BaseModel):
     call_type: Optional[str] = None
     mode: Optional[str] = None
     disposition: Optional[str] = None
+    user_intent: Optional[str] = None
     initial_context: Optional[Dict[str, Any]] = None
     gathered_context: Optional[Dict[str, Any]] = None
     # New USD field
@@ -542,16 +546,17 @@ async def download_usage_runs_report(
         except json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="Invalid filters format")
 
-    output, filename = await generate_usage_runs_report_csv(
+    output, filename = await generate_usage_runs_report_excel(
         user.selected_organization_id,
         start_date=start_dt,
         end_date=end_dt,
         filters=parsed_filters,
     )
 
+    from io import BytesIO
     return StreamingResponse(
-        output,
-        media_type="text/csv",
+        BytesIO(output),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

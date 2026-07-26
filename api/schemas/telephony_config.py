@@ -23,6 +23,8 @@ from api.services.telephony.providers.cloudonix.config import (
 from api.services.telephony.providers.plivo.config import (
     PlivoConfigurationRequest,
     PlivoConfigurationResponse,
+    PlivoSIPConfigurationRequest,
+    PlivoSIPConfigurationResponse,
 )
 from api.services.telephony.providers.telnyx.config import (
     TelnyxConfigurationRequest,
@@ -53,6 +55,7 @@ TelephonyConfigRequest = Annotated[
         ARIConfigurationRequest,
         CloudonixConfigurationRequest,
         PlivoConfigurationRequest,
+        PlivoSIPConfigurationRequest,
         TelnyxConfigurationRequest,
         TwilioConfigurationRequest,
         TwilioSIPConfigurationRequest,
@@ -75,6 +78,7 @@ class TelephonyConfigurationResponse(BaseModel):
     twilio: Optional[TwilioConfigurationResponse] = None
     twilio_sip: Optional[TwilioSIPConfigurationResponse] = None
     plivo: Optional[PlivoConfigurationResponse] = None
+    plivo_sip: Optional[PlivoSIPConfigurationResponse] = None
     vonage: Optional[VonageConfigurationResponse] = None
     vobiz: Optional[VobizConfigurationResponse] = None
     vobiz_sip: Optional[VobizSIPConfigurationResponse] = None
@@ -147,6 +151,8 @@ __all__ = [
     "CloudonixConfigurationResponse",
     "PlivoConfigurationRequest",
     "PlivoConfigurationResponse",
+    "PlivoSIPConfigurationRequest",
+    "PlivoSIPConfigurationResponse",
     "TelephonyConfigRequest",
     "TelephonyConfigurationResponse",
     "TelnyxConfigurationRequest",

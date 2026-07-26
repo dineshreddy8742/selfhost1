@@ -190,6 +190,12 @@ class DograhGeminiLiveLLMService(GeminiLiveLLMService):
     # kick off bot turns in the Dograh flow.
     # ------------------------------------------------------------------
 
+    async def _connection_task_handler(self, config):
+        if self._settings.extra.get("disable_input_transcription"):
+            logger.debug(f"{self}: disabling input audio transcription because parallel STT is enabled")
+            config.input_audio_transcription = None
+        await super()._connection_task_handler(config)
+
     @traced_gemini_live(operation="llm_setup")
     async def _handle_session_ready(self, session):
         logger.debug(

@@ -25,9 +25,21 @@ export default function CsvUploadSelector({ onFileUploaded, selectedFileName }: 
     if (!file) return;
 
     // Validate file type
-    if (!file.name.endsWith('.csv')) {
-      toast.error('Please select a CSV file');
+    const isCsv = file.name.endsWith('.csv');
+    const isXlsx = file.name.endsWith('.xlsx');
+    const isXls = file.name.endsWith('.xls');
+
+    if (!isCsv && !isXlsx && !isXls) {
+      toast.error('Please select an Excel (.xlsx, .xls) or CSV file');
       return;
+    }
+
+    // Determine Content-Type
+    let contentType = 'text/csv';
+    if (isXlsx) {
+      contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    } else if (isXls) {
+      contentType = 'application/vnd.ms-excel';
     }
 
     // Validate file size
@@ -46,7 +58,7 @@ export default function CsvUploadSelector({ onFileUploaded, selectedFileName }: 
         body: {
           file_name: file.name,
           file_size: file.size,
-          content_type: 'text/csv',
+          content_type: contentType,
         },
       });
 
@@ -61,7 +73,7 @@ export default function CsvUploadSelector({ onFileUploaded, selectedFileName }: 
         method: 'PUT',
         body: file,
         headers: {
-          'Content-Type': 'text/csv',
+          'Content-Type': contentType,
         },
       });
 
@@ -76,8 +88,8 @@ export default function CsvUploadSelector({ onFileUploaded, selectedFileName }: 
       onFileUploaded(presignedData.file_key, file.name);
       toast.success(`File uploaded: ${file.name}`);
     } catch (error) {
-      logger.error('Error uploading CSV:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to upload CSV file');
+      logger.error('Error uploading file:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to upload file');
     } finally {
       setUploading(false);
       setUploadProgress(0);
@@ -94,12 +106,12 @@ export default function CsvUploadSelector({ onFileUploaded, selectedFileName }: 
 
   return (
     <div className="space-y-2">
-      <Label>CSV File</Label>
+      <Label>Campaign Source File (Excel / CSV)</Label>
       <div className="flex items-center gap-4">
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv"
+          accept=".csv,.xlsx,.xls"
           onChange={handleFileSelect}
           className="hidden"
         />
@@ -109,7 +121,7 @@ export default function CsvUploadSelector({ onFileUploaded, selectedFileName }: 
           onClick={handleButtonClick}
           disabled={uploading}
         >
-          {uploading ? `Uploading... ${uploadProgress}%` : 'Upload CSV File'}
+          {uploading ? `Uploading... ${uploadProgress}%` : 'Upload Excel / CSV File'}
         </Button>
         {selectedFileName && !uploading && (
           <div className="flex-1 text-sm">
@@ -119,8 +131,8 @@ export default function CsvUploadSelector({ onFileUploaded, selectedFileName }: 
         )}
       </div>
       <p className="text-sm text-muted-foreground">
-        Upload a CSV file with contact data. Must include phone_number column.
-        The columns can be accessed as initial_context in the workflow nodes. <br/>
+        Upload an Excel (.xlsx, .xls) or CSV file with contact data. Must include `phone_number` column.
+        The columns can be accessed as initial_context variables in the workflow nodes. <br/>
         Max 10MB.
       </p>
     </div>

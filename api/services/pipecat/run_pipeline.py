@@ -107,7 +107,7 @@ def _create_realtime_user_turn_config(provider: str):
                 start=[VADUserTurnStartStrategy(enable_interruptions=False)],
                 stop=[SpeechTimeoutUserTurnStopStrategy()],
             ),
-            SileroVADAnalyzer(params=VADParams(stop_secs=0.2)),
+            SileroVADAnalyzer(params=VADParams(confidence=0.4, stop_secs=0.2, min_volume=0.0)),
         )
 
     if provider == ServiceProviders.OPENAI_REALTIME.value:
@@ -137,7 +137,7 @@ def _create_realtime_user_turn_config(provider: str):
             start=[VADUserTurnStartStrategy()],
             stop=[SpeechTimeoutUserTurnStopStrategy()],
         ),
-        SileroVADAnalyzer(params=VADParams(stop_secs=0.2)),
+        SileroVADAnalyzer(params=VADParams(confidence=0.4, stop_secs=0.5, min_volume=0.0)),
     )
 
 
@@ -210,6 +210,13 @@ async def run_pipeline_telephony(
 
     spec = telephony_registry.get(provider_name)
     audio_config = create_audio_config(provider_name)
+    if is_realtime:
+        logger.info(
+            f"[run {workflow_run_id}] Realtime mode active: forcing pipeline_sample_rate and "
+            f"vad_sample_rate to 16000Hz for compatibility with realtime streaming models."
+        )
+        audio_config.pipeline_sample_rate = 16000
+        audio_config.vad_sample_rate = 16000
 
     transport = await spec.transport_factory(
         websocket,
@@ -358,7 +365,7 @@ async def _run_pipeline(
     # Extract configurations from the version's workflow_configurations
     max_call_duration_seconds = 300  # Default 5 minutes
     max_user_idle_timeout = 10.0  # Default 10 seconds
-    smart_turn_stop_secs = 2.0  # Default 2 seconds for incomplete turn timeout
+    smart_turn_stop_secs = 1.0  # 1 second for incomplete turn timeout - reduced for faster response
     turn_stop_strategy = "transcription"  # Default to transcription-based detection
     keyterms = None  # Dictionary words for STT boosting
 
@@ -415,9 +422,51 @@ async def _run_pipeline(
 
     # Create services based on user configuration
     if is_realtime:
-        llm = create_realtime_llm_service(user_config, audio_config)
         stt = None
         tts = None
+
+        # Check if a parallel STT configuration is available for real-time transcription
+        stt_config = None
+        from api.services.configuration.ai_model_configuration import get_organization_ai_model_configuration_v2
+        org_config = await get_organization_ai_model_configuration_v2(workflow.organization_id)
+        if org_config:
+            if org_config.mode == "byok" and org_config.byok:
+                if org_config.byok.realtime and org_config.byok.realtime.stt:
+                    stt_config = org_config.byok.realtime.stt
+                elif org_config.byok.pipeline:
+                    stt_config = org_config.byok.pipeline.stt
+            elif org_config.mode == "dograh" and org_config.dograh:
+                from api.services.configuration.registry import DograhSTTService
+                stt_config = DograhSTTService(
+                    provider=ServiceProviders.DOGRAH,
+                    api_key=org_config.dograh.api_key,
+                    model="default",
+                    language=org_config.dograh.language,
+                )
+
+        if stt_config:
+            logger.info(
+                f"[run {workflow_run_id}] Found parallel STT configuration "
+                f"({stt_config.provider}); initializing parallel STT for real-time transcription."
+            )
+            from api.schemas.ai_model_configuration import EffectiveAIModelConfiguration
+            dummy_config = EffectiveAIModelConfiguration(stt=stt_config)
+            stt = create_stt_service(
+                dummy_config,
+                audio_config,
+                keyterms=keyterms,
+                correlation_id=mps_correlation_id,
+            )
+
+        llm = create_realtime_llm_service(user_config, audio_config)
+
+        if stt and hasattr(llm, "_settings") and hasattr(llm._settings, "extra"):
+            logger.info(f"[run {workflow_run_id}] Disabling Gemini Live input transcription since parallel STT is active.")
+            if llm._settings.extra is None:
+                llm._settings.extra = {}
+            if isinstance(llm._settings.extra, dict):
+                llm._settings.extra["disable_input_transcription"] = True
+
         # Realtime services don't implement run_inference, so create a
         # separate text LLM for variable extraction and other out-of-band
         # inference calls.
@@ -616,7 +665,7 @@ async def _run_pipeline(
         FunctionCallUserMuteStrategy(),
         CallbackUserMuteStrategy(should_mute_callback=engine.should_mute_user),
     ]
-    user_vad_analyzer = SileroVADAnalyzer(params=VADParams(stop_secs=0.2))
+    user_vad_analyzer = SileroVADAnalyzer(params=VADParams(confidence=0.4, stop_secs=0.2, min_volume=0.0))
 
     # Configure turn strategies based on STT provider, model, and workflow configuration
     if is_realtime:
@@ -668,8 +717,12 @@ async def _run_pipeline(
         vad_analyzer=user_vad_analyzer,
     )
     context_aggregator = LLMContextAggregatorPair(
-        context, assistant_params=assistant_params, user_params=user_params
+        context,
+        assistant_params=assistant_params,
+        user_params=user_params,
+        realtime_service_mode=is_realtime,
     )
+
 
     # Create usage metrics aggregator with engine's callback
     pipeline_engine_callback_processor = PipelineEngineCallbacksProcessor(
@@ -775,6 +828,7 @@ async def _run_pipeline(
             pipeline_engine_callback_processor,
             pipeline_metrics_aggregator,
             voicemail_detector=voicemail_detector,
+            stt=stt,
         )
     else:
         pipeline = build_pipeline(

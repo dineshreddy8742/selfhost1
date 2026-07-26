@@ -75,11 +75,13 @@ class BYOKRealtimeAIModelConfiguration(BaseModel):
     realtime: RealtimeConfig
     llm: LLMConfig
     embeddings: EmbeddingsConfig | None = None
+    stt: STTConfig | None = None
 
     @model_validator(mode="after")
     def reject_dograh_providers(self):
         _reject_dograh_provider("llm", self.llm)
         _reject_dograh_provider("embeddings", self.embeddings)
+        _reject_dograh_provider("stt", self.stt)
         return self
 
 
@@ -147,6 +149,7 @@ def compile_ai_model_configuration_v2(
         llm=realtime.llm,
         realtime=realtime.realtime,
         embeddings=realtime.embeddings,
+        stt=realtime.stt,
         is_realtime=True,
     )
 

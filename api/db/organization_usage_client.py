@@ -21,6 +21,7 @@ from api.db.models import (
 from api.enums import OrganizationConfigurationKey, UserConfigurationKey
 from api.schemas.ai_model_configuration import EffectiveAIModelConfiguration
 from api.utils.recording_artifacts import get_recording_storage_key
+from api.utils.transcript import detect_user_intent, generate_transcript_text
 
 
 class OrganizationUsageClient(BaseDBClient):
@@ -207,15 +208,39 @@ class OrganizationUsageClient(BaseDBClient):
                 # Inbound runs only have caller_number/called_number; the
                 # caller_number is the customer. Outbound runs use the
                 # phone_number key written by the dispatchers.
-                if run.call_type == "inbound":
+                call_type = run.call_type or ic.get("direction") or "outbound"
+                if call_type == "inbound":
                     phone_number = caller_number
                 else:
-                    phone_number = ic.get("phone_number")
+                    phone_number = ic.get("phone_number") or called_number
 
-                # Extract disposition from gathered_context
+                # Extract disposition from gathered_context, fallback to last callback status or state
                 disposition = None
                 if run.gathered_context:
                     disposition = run.gathered_context.get("mapped_call_disposition")
+                if not disposition and run.logs:
+                    callbacks = run.logs.get("telephony_status_callbacks", [])
+                    if callbacks:
+                        disposition = callbacks[-1].get("status")
+                if not disposition:
+                    disposition = run.state
+
+                # Generate transcript text for intent detection
+                logs = run.logs or {}
+                if isinstance(logs, dict):
+                    events = logs.get("realtime_feedback_events") or []
+                    transcript_text = generate_transcript_text(events)
+                elif isinstance(logs, list):
+                    transcript_text = generate_transcript_text(logs)
+                else:
+                    transcript_text = ""
+
+                user_intent = detect_user_intent(
+                    gathered_context=run.gathered_context,
+                    transcript_text=transcript_text,
+                    disposition=disposition,
+                    duration=call_duration,
+                )
 
                 run_data = {
                     "id": run.id,
@@ -234,9 +259,10 @@ class OrganizationUsageClient(BaseDBClient):
                     "phone_number": phone_number,
                     "caller_number": caller_number,
                     "called_number": called_number,
-                    "call_type": run.call_type,
+                    "call_type": call_type,
                     "mode": run.mode,
                     "disposition": disposition,
+                    "user_intent": user_intent,
                     "initial_context": run.initial_context,
                     "gathered_context": run.gathered_context,
                 }
@@ -275,6 +301,9 @@ class OrganizationUsageClient(BaseDBClient):
                     WorkflowRunModel.cost_info,
                     WorkflowRunModel.usage_info,
                     WorkflowRunModel.public_access_token,
+                    WorkflowRunModel.logs,
+                    WorkflowRunModel.call_type,
+                    WorkflowRunModel.state,
                 )
                 .join(WorkflowModel, WorkflowRunModel.workflow_id == WorkflowModel.id)
                 .join(UserModel, WorkflowModel.user_id == UserModel.id)

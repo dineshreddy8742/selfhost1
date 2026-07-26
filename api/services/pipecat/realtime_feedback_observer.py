@@ -307,6 +307,8 @@ def register_turn_log_handlers(
 
     @user_aggregator.event_handler("on_user_turn_stopped")
     async def on_user_turn_stopped(aggregator, strategy, message):
+        if aggregator._realtime_service_mode:
+            return
         logs_buffer.increment_turn()
         try:
             await logs_buffer.append(
@@ -318,6 +320,22 @@ def register_turn_log_handlers(
             )
         except Exception as e:
             logger.error(f"Failed to append user turn to logs buffer: {e}")
+
+    @user_aggregator.event_handler("on_user_turn_message_added")
+    async def on_user_turn_message_added(aggregator, message):
+        if not aggregator._realtime_service_mode:
+            return
+        logs_buffer.increment_turn()
+        try:
+            await logs_buffer.append(
+                build_user_transcription_event(
+                    text=message.content,
+                    final=True,
+                    timestamp=message.timestamp,
+                )
+            )
+        except Exception as e:
+            logger.error(f"Failed to append user turn (realtime) to logs buffer: {e}")
 
     @assistant_aggregator.event_handler("on_assistant_turn_stopped")
     async def on_assistant_turn_stopped(aggregator, message):
