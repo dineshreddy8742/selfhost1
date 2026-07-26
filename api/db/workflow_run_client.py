@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import func
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from api.db.base_client import BaseDBClient
 from api.db.filters import apply_workflow_run_filters, get_workflow_run_order_clause
@@ -18,6 +19,11 @@ from api.enums import CallType, StorageBackend
 from api.schemas.workflow import WorkflowRunResponseSchema
 from api.services.workflow.run_usage_response import format_public_cost_info
 from api.utils.recording_artifacts import get_recording_storage_key
+from api.utils.transcript import (
+    detect_user_intent,
+    detect_user_intent_async,
+    generate_transcript_text,
+)
 
 
 class WorkflowRunClient(BaseDBClient):
@@ -309,34 +315,49 @@ class WorkflowRunClient(BaseDBClient):
             result = await session.execute(
                 base_query.order_by(order_clause).limit(limit).offset(offset)
             )
-            runs = [
-                WorkflowRunResponseSchema.model_validate(
-                    {
-                        "id": run.id,
-                        "workflow_id": run.workflow_id,
-                        "name": run.name,
-                        "mode": run.mode,
-                        "created_at": run.created_at,
-                        "is_completed": run.is_completed,
-                        "recording_url": run.recording_url,
-                        "transcript_url": run.transcript_url,
-                        "user_recording_url": get_recording_storage_key(
-                            run.extra, "user"
-                        ),
-                        "bot_recording_url": get_recording_storage_key(
-                            run.extra, "bot"
-                        ),
-                        "cost_info": format_public_cost_info(
-                            run.cost_info, run.usage_info
-                        ),
-                        "definition_id": run.definition_id,
-                        "initial_context": run.initial_context,
-                        "gathered_context": run.gathered_context,
-                        "call_type": run.call_type,
-                    }
+            runs = []
+            for run in result.scalars().all():
+                logs = run.logs or {}
+                events = logs.get("realtime_feedback_events") or [] if isinstance(logs, dict) else []
+                transcript_text = generate_transcript_text(events)
+                cost = run.cost_info or {}
+                duration = float(cost.get("call_duration_seconds") or 0)
+                disposition = (run.gathered_context or {}).get("mapped_call_disposition", "")
+                intent = await detect_user_intent_async(
+                    gathered_context=run.gathered_context,
+                    transcript_text=transcript_text,
+                    disposition=disposition,
+                    duration=duration,
+                    organization_id=organization_id,
                 )
-                for run in result.scalars().all()
-            ]
+                runs.append(
+                    WorkflowRunResponseSchema.model_validate(
+                        {
+                            "id": run.id,
+                            "workflow_id": run.workflow_id,
+                            "name": run.name,
+                            "mode": run.mode,
+                            "created_at": run.created_at,
+                            "is_completed": run.is_completed,
+                            "recording_url": run.recording_url,
+                            "transcript_url": run.transcript_url,
+                            "user_recording_url": get_recording_storage_key(
+                                run.extra, "user"
+                            ),
+                            "bot_recording_url": get_recording_storage_key(
+                                run.extra, "bot"
+                            ),
+                            "cost_info": format_public_cost_info(
+                                run.cost_info, run.usage_info
+                            ),
+                            "definition_id": run.definition_id,
+                            "initial_context": run.initial_context,
+                            "gathered_context": run.gathered_context,
+                            "call_type": run.call_type,
+                            "user_intent": intent,
+                        }
+                    )
+                )
             return runs, total_count
 
     async def update_workflow_run(
@@ -376,25 +397,26 @@ class WorkflowRunClient(BaseDBClient):
             if cost_info:
                 run.cost_info = cost_info
             if initial_context:
-                # Merge initial context patches so independent call-start/runtime
-                # writers do not erase keys stored earlier in the run lifecycle.
                 run.initial_context = {
                     **(run.initial_context or {}),
                     **initial_context,
                 }
+                flag_modified(run, "initial_context")
             if gathered_context:
-                # Lets merge the incoming gathered context keys with the existing ones
                 run.gathered_context = {
-                    **run.gathered_context,
+                    **(run.gathered_context or {}),
                     **gathered_context,
                 }
+                flag_modified(run, "gathered_context")
             if logs:
-                # Lets merge the incoming logs key with existing ones
-                run.logs = {**run.logs, **logs}
+                run.logs = {**(run.logs or {}), **logs}
+                flag_modified(run, "logs")
             if annotations:
-                run.annotations = {**run.annotations, **annotations}
+                run.annotations = {**(run.annotations or {}), **annotations}
+                flag_modified(run, "annotations")
             if extra:
-                run.extra = {**run.extra, **extra}
+                run.extra = {**(run.extra or {}), **extra}
+                flag_modified(run, "extra")
             if is_completed:
                 run.is_completed = is_completed
             if state:

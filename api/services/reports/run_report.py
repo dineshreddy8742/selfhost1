@@ -143,7 +143,7 @@ async def generate_usage_runs_report_excel(
     """
     import openpyxl
     from io import BytesIO
-    from api.utils.transcript import detect_user_intent, generate_transcript_text
+    from api.utils.transcript import detect_user_intent, detect_user_intent_async, generate_transcript_text
     from api.utils.artifacts import artifact_url
     from openpyxl.styles import Alignment, Font
 
@@ -277,11 +277,12 @@ async def generate_usage_runs_report_excel(
             transcript_text = ""
 
         # 9. Intent Detection
-        intent = detect_user_intent(
+        intent = await detect_user_intent_async(
             gathered_context=run.gathered_context,
             transcript_text=transcript_text,
             disposition=disposition,
             duration=duration,
+            organization_id=organization_id,
         )
 
         ws.append([

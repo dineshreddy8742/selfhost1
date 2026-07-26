@@ -20,7 +20,13 @@ coturn/
 dograh_pcm_cache/
 node_modules/
 
-# Superpowers brainstorm mockups (local only)
-.superpowers/
-docs/superpowers/
-.gstack/
+# Local deployment archives and temp scripts
+deploy_code.tar.gz
+deploy.zip
+remote_script.py
+api/check_run.py
+scripts/deploy_fix.py
+scripts/query_db.py
+scripts/remote_fix.py
+scripts/run_remote_deploy.py
+

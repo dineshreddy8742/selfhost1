@@ -185,12 +185,7 @@ export default function ModelConfigurationV2({
                             </Badge>
                         </div>
                         <p className="mt-2 text-sm text-muted-foreground">
-                            Configure your AI model, voice, and transcription services.{" "}
-                            {docsUrl && (
-                                <a href={docsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 underline">
-                                    Learn more <ExternalLink className="h-3 w-3" />
-                                </a>
-                            )}
+                            Configure your AI model, voice, and transcription services.
                         </p>
                     </div>
                     {source === "legacy_user_v1" && (
@@ -239,12 +234,7 @@ export default function ModelConfigurationV2({
                 <div>
                     <h1 className="text-3xl font-bold">AI Models Configuration</h1>
                     <p className="mt-2 text-sm text-muted-foreground">
-                        Organization-scoped model settings.{" "}
-                        {docsUrl && (
-                            <a href={docsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 underline">
-                                Learn more <ExternalLink className="h-3 w-3" />
-                            </a>
-                        )}
+                        Organization-scoped model settings.
                     </p>
                 </div>
             </div>

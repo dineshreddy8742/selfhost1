@@ -21,7 +21,11 @@ from api.db.models import (
 from api.enums import OrganizationConfigurationKey, UserConfigurationKey
 from api.schemas.ai_model_configuration import EffectiveAIModelConfiguration
 from api.utils.recording_artifacts import get_recording_storage_key
-from api.utils.transcript import detect_user_intent, generate_transcript_text
+from api.utils.transcript import (
+    detect_user_intent,
+    detect_user_intent_async,
+    generate_transcript_text,
+)
 
 
 class OrganizationUsageClient(BaseDBClient):
@@ -235,11 +239,12 @@ class OrganizationUsageClient(BaseDBClient):
                 else:
                     transcript_text = ""
 
-                user_intent = detect_user_intent(
+                user_intent = await detect_user_intent_async(
                     gathered_context=run.gathered_context,
                     transcript_text=transcript_text,
                     disposition=disposition,
                     duration=call_duration,
+                    organization_id=organization_id,
                 )
 
                 run_data = {

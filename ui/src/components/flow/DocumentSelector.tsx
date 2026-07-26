@@ -59,8 +59,7 @@ export const DocumentSelector = ({
                         <Label>{label}</Label>
                         {description && (
                             <Label className="text-xs text-muted-foreground">
-                            {description}{" "}
-                            <a href={KNOWLEDGE_BASE_DOC_URL} target="_blank" rel="noopener noreferrer" className="underline">Learn more</a>
+                            {description}
                         </Label>
                         )}
                     </>
@@ -89,8 +88,7 @@ export const DocumentSelector = ({
                     <Label>{label}</Label>
                     {description && (
                         <Label className="text-xs text-muted-foreground">
-                            {description}{" "}
-                            <a href={KNOWLEDGE_BASE_DOC_URL} target="_blank" rel="noopener noreferrer" className="underline">Learn more</a>
+                            {description}
                         </Label>
                     )}
                 </>

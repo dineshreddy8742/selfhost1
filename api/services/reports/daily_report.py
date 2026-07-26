@@ -249,7 +249,7 @@ class DailyReportService:
         import openpyxl
         from io import BytesIO
         from api.utils.artifacts import artifact_url
-        from api.utils.transcript import detect_user_intent, generate_transcript_text
+        from api.utils.transcript import detect_user_intent, detect_user_intent_async, generate_transcript_text
 
         # Parse date and timezone
         tz = ZoneInfo(timezone)
@@ -399,11 +399,12 @@ class DailyReportService:
                 transcript_text = ""
 
             # 10. Intent Detection
-            intent = detect_user_intent(
+            intent = await detect_user_intent_async(
                 gathered_context=run.get("gathered_context"),
                 transcript_text=transcript_text,
                 disposition=disposition,
                 duration=duration,
+                organization_id=organization_id,
             )
 
             ws.append([

@@ -19,7 +19,7 @@ from api.enums import CallType, PostHogEvent, StorageBackend, WorkflowStatus
 from api.schemas.ai_model_configuration import OrganizationAIModelConfigurationV2
 from api.schemas.workflow import WorkflowRunResponseSchema
 from api.sdk_expose import sdk_expose
-from api.services.auth.depends import get_user
+from api.services.auth.depends import get_user, get_user_with_selected_organization
 from api.services.configuration.ai_model_configuration import (
     WORKFLOW_MODEL_CONFIGURATION_V2_OVERRIDE_KEY,
     check_for_masked_keys_in_ai_model_configuration_v2,
@@ -1372,6 +1372,33 @@ async def get_workflow_run(
     }
 
 
+class UpdateRunIntentRequest(BaseModel):
+    intent: Literal["Interested", "Not Interested", "Not Connected"]
+
+
+@router.patch("/{workflow_id}/runs/{run_id}/intent")
+async def update_run_intent(
+    workflow_id: int,
+    run_id: int,
+    request: UpdateRunIntentRequest,
+    user: UserModel = Depends(get_user_with_selected_organization),
+):
+    """Manually override the user intent classification for a workflow run."""
+    org_id = getattr(user, "selected_organization_id", None)
+    run = await db_client.get_workflow_run(run_id, organization_id=org_id)
+    if not run:
+        run = await db_client.get_workflow_run_by_id(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Workflow run not found")
+
+    await db_client.update_workflow_run(
+        run_id,
+        gathered_context={"user_intent": request.intent},
+    )
+    return {"id": run_id, "intent": request.intent}
+
+
+
 class WorkflowRunsResponse(BaseModel):
     runs: List[WorkflowRunResponseSchema]
     total_count: int
@@ -1379,6 +1406,7 @@ class WorkflowRunsResponse(BaseModel):
     limit: int
     total_pages: int
     applied_filters: Optional[List[dict]] = None
+
 
 
 @router.get("/{workflow_id}/runs")

@@ -138,15 +138,7 @@ export function ToolSelector({
                     <Label>{label}</Label>
                     {description && (
                         <Label className="text-xs text-muted-foreground">
-                            {description}{" "}
-                            <a
-                                href={TOOLS_INTRODUCTION_DOC_URL}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="underline"
-                            >
-                                Learn more
-                            </a>
+                            {description}
                         </Label>
                     )}
                 </>

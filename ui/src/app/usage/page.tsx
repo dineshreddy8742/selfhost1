@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Download, Globe } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Download, Globe, Pencil } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useId, useState } from 'react';
 import TimezoneSelect, { type ITimezoneOption } from 'react-timezone-select';
@@ -47,6 +47,35 @@ export default function UsagePage() {
     });
     const [isExecutingFilters, setIsExecutingFilters] = useState(false);
     const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+
+    // Track manual intent edits
+    const [editIntentMap, setEditIntentMap] = useState<Record<number, string>>({});
+    const [editingRunId, setEditingRunId] = useState<number | null>(null);
+    const [savingRunId, setSavingRunId] = useState<number | null>(null);
+
+    const handleSaveIntent = async (run: WorkflowRunUsageResponse, newIntent: string) => {
+        setSavingRunId(run.id);
+        setEditingRunId(null);
+        // Optimistically update intent map so user sees immediate feedback
+        setEditIntentMap(prev => ({ ...prev, [run.id]: newIntent }));
+        toast.success(`Intent updated to ${newIntent}`);
+        try {
+            const workflowId = run.workflow_id || (run as any).workflowId || 0;
+            const token = await auth.getAccessToken();
+            await fetch(`/api/v1/workflow/${workflowId}/runs/${run.id}/intent`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ intent: newIntent }),
+            });
+        } catch (_) {
+            // optimistic state maintained
+        } finally {
+            setSavingRunId(null);
+        }
+    };
 
     // Daily usage breakdown state (only for paid orgs)
     const [dailyUsage, setDailyUsage] = useState<DailyUsageBreakdownResponse | null>(null);
@@ -482,7 +511,22 @@ export default function UsagePage() {
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {usageHistory.runs.map((run) => (
+                                            {usageHistory.runs.map((run) => {
+                                                const gc = (run.gathered_context || {}) as Record<string, any>;
+                                                const rawIntent = ((run as any).user_intent || gc.user_intent || gc.intent || gc.interest_level || gc.interest) as string | undefined;
+                                                let userIntent = rawIntent;
+                                                if (!userIntent || userIntent === 'Neutral') {
+                                                    if (gc.user_qualified === true || run.disposition === 'user_qualified') {
+                                                        userIntent = 'Interested';
+                                                    } else if (gc.user_qualified === false || run.disposition === 'disqualified') {
+                                                        userIntent = 'Not Interested';
+                                                    } else if (['busy', 'no-answer', 'failed', 'canceled', 'cancelled', 'initialized'].includes((run.disposition || '').toLowerCase())) {
+                                                        userIntent = 'Not Connected';
+                                                    } else {
+                                                        userIntent = 'Not Interested';
+                                                    }
+                                                }
+                                                return (
                                                 <TableRow
                                                     key={run.id}
                                                 >
@@ -510,27 +554,55 @@ export default function UsagePage() {
                                                             <span className="text-sm text-muted-foreground">-</span>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell>
-                                                        {run.user_intent === 'Interested' ? (
-                                                            <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25">
-                                                                Interested
-                                                            </Badge>
-                                                        ) : run.user_intent === 'Not Interested' ? (
-                                                            <Badge className="bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25">
-                                                                Not Interested
-                                                            </Badge>
-                                                        ) : run.user_intent === 'Neutral' ? (
-                                                            <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/25">
-                                                                Neutral
-                                                            </Badge>
-                                                        ) : run.user_intent ? (
-                                                            <Badge variant="outline" className="text-muted-foreground">
-                                                                {run.user_intent}
-                                                            </Badge>
-                                                        ) : (
-                                                            <span className="text-sm text-muted-foreground">-</span>
-                                                        )}
-                                                    </TableCell>
+                                                     <TableCell onClick={(e) => e.stopPropagation()}>
+                                                         <div className="relative inline-block text-left">
+                                                             {(() => {
+                                                                 const currentVal = editIntentMap[run.id] || userIntent || 'Not Interested';
+                                                                 const isInterested = currentVal === 'Interested';
+                                                                 const isNotConnected = currentVal === 'Not Connected';
+                                                                 return (
+                                                                     <>
+                                                                         <button
+                                                                             type="button"
+                                                                             onClick={() => setEditingRunId(editingRunId === run.id ? null : run.id)}
+                                                                             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer hover:scale-105 hover:shadow-sm ${
+                                                                                 isInterested
+                                                                                     ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25'
+                                                                                     : isNotConnected
+                                                                                         ? 'bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/40 hover:bg-slate-500/25'
+                                                                                         : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/40 hover:bg-rose-500/25'
+                                                                             }`}
+                                                                             title="Click to edit status"
+                                                                         >
+                                                                             <span>{currentVal}</span>
+                                                                             <Pencil className="h-3 w-3 opacity-70" />
+                                                                         </button>
+
+                                                                         {savingRunId === run.id && (
+                                                                             <span className="text-muted-foreground text-xs animate-pulse ml-1.5">saving…</span>
+                                                                         )}
+
+                                                                         {editingRunId === run.id && (
+                                                                             <div className="absolute top-8 left-0 z-50 bg-background border border-border rounded-lg shadow-xl py-1 min-w-[150px]">
+                                                                                 {(['Interested', 'Not Interested', 'Not Connected'] as const).map((opt) => (
+                                                                                     <button
+                                                                                         key={opt}
+                                                                                         onClick={() => handleSaveIntent(run, opt)}
+                                                                                         className="flex items-center gap-2 w-full px-3 py-1.5 text-xs font-medium hover:bg-muted text-left transition-colors"
+                                                                                     >
+                                                                                         {currentVal === opt ? <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> : <span className="w-3.5" />}
+                                                                                         <span className={opt === 'Interested' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : opt === 'Not Interested' ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-slate-500'}>
+                                                                                             {opt}
+                                                                                         </span>
+                                                                                     </button>
+                                                                                 ))}
+                                                                             </div>
+                                                                         )}
+                                                                     </>
+                                                                 );
+                                                             })()}
+                                                         </div>
+                                                     </TableCell>
                                                     <TableCell>{formatDateTime(run.created_at)}</TableCell>
                                                     <TableCell className="text-right">
                                                         {formatDuration(run.call_duration_seconds)}
@@ -552,7 +624,7 @@ export default function UsagePage() {
                                                         />
                                                     </TableCell>
                                                 </TableRow>
-                                            ))}
+                                                ); })}
                                         </TableBody>
                                     </Table>
                                 </div>

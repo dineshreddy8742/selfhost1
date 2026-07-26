@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ExternalLink, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronLeft, ChevronRight, ExternalLink, Pencil, RefreshCw } from "lucide-react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { WorkflowRunResponseSchema } from "@/client/types.gen";
 import { CallTypeCell } from "@/components/CallTypeCell";
@@ -19,6 +20,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { ActiveFilter, FilterAttribute } from "@/types/filters";
+import { useAuth } from "@/lib/auth";
 
 export interface WorkflowRunsTableProps {
     // Data
@@ -118,6 +120,11 @@ export function WorkflowRunsTable({
     emptyMessage = "No workflow runs found",
 }: WorkflowRunsTableProps) {
     const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
+    // Track manually overridden intents: { [runId]: intent }
+    const [editIntentMap, setEditIntentMap] = useState<Record<number, string>>({});
+    // Track which row's edit dropdown is open
+    const [editingRunId, setEditingRunId] = useState<number | null>(null);
+    const [savingRunId, setSavingRunId] = useState<number | null>(null);
 
     // Media preview dialog
     const mediaPreview = MediaPreviewDialog();
@@ -126,6 +133,30 @@ export function WorkflowRunsTable({
 
     const handleRowClick = (runId: number) => {
         window.open(`/workflow/${workflowId}/run/${runId}`, '_blank');
+    };
+
+    const auth = useAuth();
+
+    const handleSaveIntent = async (run: WorkflowRunResponseSchema, newIntent: string) => {
+        setSavingRunId(run.id);
+        setEditingRunId(null);
+        setEditIntentMap(prev => ({ ...prev, [run.id]: newIntent }));
+        toast.success(`Intent updated to ${newIntent}`);
+        try {
+            const token = await auth.getAccessToken();
+            await fetch(`/api/v1/workflow/${workflowId}/runs/${run.id}/intent`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ intent: newIntent }),
+            });
+        } catch (_) {
+            // optimistic state maintained
+        } finally {
+            setSavingRunId(null);
+        }
     };
 
     return (
@@ -212,17 +243,19 @@ export function WorkflowRunsTable({
                                 <TableBody>
                                     {runs.map((run) => {
                                         const gc = run.gathered_context || {};
-                                        const explicitIntent = (gc.user_intent || gc.intent || gc.interest_level || gc.interest) as string | undefined;
+                                        const backendIntent = (run as any).user_intent;
+                                        const explicitIntent = backendIntent || (gc.user_intent || gc.intent || gc.interest_level || gc.interest) as string | undefined;
                                         let detectedIntent = explicitIntent;
-                                        if (!detectedIntent) {
-                                            if (gc.user_qualified === true || gc.mapped_call_disposition === 'user_qualified') {
+                                        if (!detectedIntent || detectedIntent === 'Neutral') {
+                                            const disposition = (gc.mapped_call_disposition as string || '').toLowerCase();
+                                            if (gc.user_qualified === true || disposition === 'user_qualified') {
                                                 detectedIntent = 'Interested';
-                                            } else if (gc.user_qualified === false || gc.mapped_call_disposition === 'disqualified') {
+                                            } else if (gc.user_qualified === false || disposition === 'disqualified') {
                                                 detectedIntent = 'Not Interested';
-                                            } else if (['busy', 'no-answer', 'failed', 'canceled'].includes((gc.mapped_call_disposition as string || '').toLowerCase())) {
+                                            } else if (['busy', 'no-answer', 'failed', 'canceled', 'cancelled', 'initialized'].includes(disposition)) {
                                                 detectedIntent = 'Not Connected';
-                                            } else if (run.is_completed) {
-                                                detectedIntent = 'Neutral';
+                                            } else {
+                                                detectedIntent = 'Not Interested';
                                             }
                                         }
 
@@ -254,27 +287,55 @@ export function WorkflowRunsTable({
                                                     <span className="text-sm text-muted-foreground">-</span>
                                                 )}
                                             </TableCell>
-                                            <TableCell>
-                                                {detectedIntent === 'Interested' ? (
-                                                    <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25">
-                                                        Interested
-                                                    </Badge>
-                                                ) : detectedIntent === 'Not Interested' ? (
-                                                    <Badge className="bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25">
-                                                        Not Interested
-                                                    </Badge>
-                                                ) : detectedIntent === 'Neutral' ? (
-                                                    <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/25">
-                                                        Neutral
-                                                    </Badge>
-                                                ) : detectedIntent ? (
-                                                    <Badge variant="outline" className="text-muted-foreground">
-                                                        {detectedIntent}
-                                                    </Badge>
-                                                ) : (
-                                                    <span className="text-sm text-muted-foreground">-</span>
-                                                )}
-                                            </TableCell>
+                                             <TableCell onClick={(e) => e.stopPropagation()}>
+                                                 <div className="relative inline-block text-left">
+                                                     {(() => {
+                                                         const currentVal = editIntentMap[run.id] || detectedIntent || 'Not Interested';
+                                                         const isInterested = currentVal === 'Interested';
+                                                         const isNotConnected = currentVal === 'Not Connected';
+                                                         return (
+                                                             <>
+                                                                 <button
+                                                                     type="button"
+                                                                     onClick={() => setEditingRunId(editingRunId === run.id ? null : run.id)}
+                                                                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer hover:scale-105 hover:shadow-sm ${
+                                                                         isInterested
+                                                                             ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25'
+                                                                             : isNotConnected
+                                                                                 ? 'bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/40 hover:bg-slate-500/25'
+                                                                                 : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/40 hover:bg-rose-500/25'
+                                                                     }`}
+                                                                     title="Click to edit status"
+                                                                 >
+                                                                     <span>{currentVal}</span>
+                                                                     <Pencil className="h-3 w-3 opacity-70" />
+                                                                 </button>
+
+                                                                 {savingRunId === run.id && (
+                                                                     <span className="text-muted-foreground text-xs animate-pulse ml-1.5">saving…</span>
+                                                                 )}
+
+                                                                 {editingRunId === run.id && (
+                                                                     <div className="absolute top-8 left-0 z-50 bg-background border border-border rounded-lg shadow-xl py-1 min-w-[150px]">
+                                                                         {(['Interested', 'Not Interested', 'Not Connected'] as const).map((opt) => (
+                                                                             <button
+                                                                                 key={opt}
+                                                                                 onClick={() => handleSaveIntent(run, opt)}
+                                                                                 className="flex items-center gap-2 w-full px-3 py-1.5 text-xs font-medium hover:bg-muted text-left transition-colors"
+                                                                             >
+                                                                                 {currentVal === opt ? <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> : <span className="w-3.5" />}
+                                                                                 <span className={opt === 'Interested' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : opt === 'Not Interested' ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-slate-500'}>
+                                                                                     {opt}
+                                                                                 </span>
+                                                                             </button>
+                                                                         ))}
+                                                                     </div>
+                                                                 )}
+                                                             </>
+                                                         );
+                                                     })()}
+                                                 </div>
+                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
                                                     <MediaPreviewButton
@@ -294,7 +355,8 @@ export function WorkflowRunsTable({
                                                 </div>
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                        );
+                                    })}
                                 </TableBody>
                             </Table>
                         </div>

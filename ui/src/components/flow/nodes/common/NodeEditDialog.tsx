@@ -91,17 +91,6 @@ export const NodeEditDialog = ({
                 <DialogHeader>
                     <div className="flex items-center justify-between">
                         <DialogTitle>{title}</DialogTitle>
-                        {documentationUrl && (
-                            <a
-                                href={documentationUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors pr-6"
-                            >
-                                Docs
-                                <ExternalLink className="h-3.5 w-3.5" />
-                            </a>
-                        )}
                     </div>
                     <DialogDescription>
                         Configure the settings for this node in your workflow.

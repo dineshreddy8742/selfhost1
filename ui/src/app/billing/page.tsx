@@ -274,25 +274,7 @@ export default function BillingPage() {
                     <div className="text-sm text-amber-900 dark:text-amber-200">
                         <p className="font-medium">Credit purchases are unavailable in OSS mode</p>
                         <p className="mt-1">
-                            You can&apos;t purchase credits from this self-hosted app. Sign up and
-                            purchase credits at{" "}
-                            <a
-                                href="https://app.dograh.com"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 font-medium underline underline-offset-2"
-                            >
-                                app.dograh.com
-                                <ExternalLink className="h-3 w-3" />
-                            </a>
-                            . Then add the generated service key in{" "}
-                            <Link
-                                href="/model-configurations"
-                                className="font-medium underline underline-offset-2"
-                            >
-                                Model Configurations
-                            </Link>
-                            . Usage for that service key is visible in app.dograh.com.
+                            Credit purchases are managed directly by your organization administrator.
                         </p>
                     </div>
                 </div>

@@ -558,19 +558,9 @@ export function ServiceConfigurationForm({
                                 ))}
                             </SelectContent>
                         </Select>
-                        {(providerSchema?.description || providerSchema?.provider_docs_url) && (
+                        {providerSchema?.description && (
                             <p className="text-xs text-muted-foreground">
-                                {providerSchema?.description}{" "}
-                                {providerSchema?.provider_docs_url && (
-                                    <a
-                                        href={providerSchema.provider_docs_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-0.5 underline"
-                                    >
-                                        Learn more <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                )}
+                                {providerSchema.description}
                             </p>
                         )}
                     </div>

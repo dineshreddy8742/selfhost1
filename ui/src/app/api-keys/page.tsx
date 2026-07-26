@@ -441,14 +441,14 @@ export default function APIKeysPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Dograh Service Keys Section */}
+                    {/* Dailsmart Service Keys Section */}
                     <Card className="mb-6">
                         <CardHeader>
                             <div className="flex justify-between items-center">
                                 <div>
-                                    <CardTitle>Dograh Service Keys</CardTitle>
+                                    <CardTitle>Dailsmart Service Keys</CardTitle>
                                     <CardDescription>
-                                        Manage service keys for accessing Dograh AI services (LLM, TTS, STT)
+                                        Manage service keys for accessing Dailsmart AI services (LLM, TTS, STT)
                                     </CardDescription>
                                 </div>
                                 <div className="flex gap-2">
@@ -462,7 +462,7 @@ export default function APIKeysPage() {
                                             {showServiceArchived ? 'Hide' : 'Show'} Archived
                                         </Button>
                                     )}
-                                    {canCreateServiceKey ? (
+                                    {canCreateServiceKey && (
                                         <Button
                                             onClick={() => setIsCreateServiceDialogOpen(true)}
                                             size="sm"
@@ -470,10 +470,6 @@ export default function APIKeysPage() {
                                             <Plus className="w-4 h-4 mr-2" />
                                             Create Service Key
                                         </Button>
-                                    ) : (
-                                        <span className="text">
-                                            To generate additional service keys, <a href="https://app.dograh.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Sign up on app.dograh.com</a>
-                                        </span>
                                     )}
                                 </div>
                             </div>
