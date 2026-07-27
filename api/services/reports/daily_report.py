@@ -315,7 +315,9 @@ class DailyReportService:
             cell.alignment = Alignment(horizontal="center")
 
         # Add data rows
+        row_idx = 1
         for run in runs:
+            row_idx += 1
             # 1. Name
             initial = run.get("initial_context") or {}
             name = initial.get("name") or initial.get("customer_name") or initial.get("first_name", "")
@@ -421,7 +423,6 @@ class DailyReportService:
             ])
 
             # Apply alignment (wrap text for full recording text)
-            row_idx = ws.max_row
             ws.cell(row=row_idx, column=11).alignment = Alignment(wrap_text=True, vertical="top")
 
         # Write workbook to bytes

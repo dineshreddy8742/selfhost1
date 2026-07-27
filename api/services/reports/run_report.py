@@ -192,7 +192,9 @@ async def generate_usage_runs_report_excel(
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center")
 
+    row_idx = 1
     for run in runs:
+        row_idx += 1
         # 1. Name
         initial = run.initial_context or {}
         name = initial.get("name") or initial.get("customer_name") or initial.get("first_name", "")
@@ -299,7 +301,6 @@ async def generate_usage_runs_report_excel(
         ])
 
         # Apply alignment (wrap text for full recording text)
-        row_idx = ws.max_row
         ws.cell(row=row_idx, column=11).alignment = Alignment(wrap_text=True, vertical="top")
 
     bytes_io = BytesIO()
