@@ -291,33 +291,6 @@ def detect_user_intent(
         "initialized",
     ):
         return "Not Connected"
-        val = explicit_intent.lower().strip()
-        if val in ("not connected", "not_connected"):
-            return "Not Connected"
-        if any(
-            k in val
-            for k in [
-                "not interested",
-                "uninterested",
-                "disqualified",
-                "no_interest",
-                "rejected",
-                "not_interested",
-            ]
-        ):
-            return "Not Interested"
-        if any(
-            k in val
-            for k in [
-                "interested",
-                "qualified",
-                "high",
-                "positive",
-                "hot",
-                "warm",
-            ]
-        ):
-            return "Interested"
 
     if (
         gathered.get("user_qualified") is True

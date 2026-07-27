@@ -277,12 +277,11 @@ async def generate_usage_runs_report_excel(
             transcript_text = ""
 
         # 9. Intent Detection
-        intent = await detect_user_intent_async(
+        intent = detect_user_intent(
             gathered_context=run.gathered_context,
             transcript_text=transcript_text,
             disposition=disposition,
             duration=duration,
-            organization_id=organization_id,
         )
 
         ws.append([
