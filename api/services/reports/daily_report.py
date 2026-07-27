@@ -271,10 +271,24 @@ class DailyReportService:
             workflow_id=workflow_id,
         )
 
-        # Create virtual Excel workbook
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Call Reports"
+        # Create virtual Excel workbook (streaming write_only mode for extreme speed)
+        wb = openpyxl.Workbook(write_only=True)
+        ws = wb.create_sheet(title="Call Reports")
+
+        # Column widths
+        ws.column_dimensions['A'].width = 20  # Name
+        ws.column_dimensions['B'].width = 15  # Number
+        ws.column_dimensions['C'].width = 15  # Call Type
+        ws.column_dimensions['D'].width = 18  # Disposition
+        ws.column_dimensions['E'].width = 16  # Intent
+        ws.column_dimensions['F'].width = 15  # Status
+        ws.column_dimensions['G'].width = 18  # Duration
+        ws.column_dimensions['H'].width = 20  # Call Tags
+        ws.column_dimensions['I'].width = 40  # Rec URL
+        ws.column_dimensions['J'].width = 40  # Transcript URL
+        ws.column_dimensions['K'].width = 60  # Full Recording Text
+
+        from openpyxl.styles import Alignment, Font
 
         # Headers
         headers = [
@@ -290,34 +304,18 @@ class DailyReportService:
             "Recording Transcript URL",
             "Full Recording Text"
         ]
-        ws.append(headers)
-
-        # Format column widths and wrap text for transcript
-        ws.column_dimensions['A'].width = 20  # Name
-        ws.column_dimensions['B'].width = 15  # Number
-        ws.column_dimensions['C'].width = 15  # Call Type
-        ws.column_dimensions['D'].width = 18  # Disposition
-        ws.column_dimensions['E'].width = 16  # Intent
-        ws.column_dimensions['F'].width = 15  # Status
-        ws.column_dimensions['G'].width = 18  # Duration
-        ws.column_dimensions['H'].width = 20  # Call Tags
-        ws.column_dimensions['I'].width = 40  # Rec URL
-        ws.column_dimensions['J'].width = 40  # Transcript URL
-        ws.column_dimensions['K'].width = 60  # Full Recording Text
-
-        from openpyxl.styles import Alignment, Font
-
-        # Header style
+        header_cells = []
         header_font = Font(name="Calibri", size=11, bold=True)
-        for col_num in range(1, 12):
-            cell = ws.cell(row=1, column=col_num)
+        header_alignment = Alignment(horizontal="center")
+        for h in headers:
+            cell = openpyxl.cell.WriteOnlyCell(ws, value=h)
             cell.font = header_font
-            cell.alignment = Alignment(horizontal="center")
+            cell.alignment = header_alignment
+            header_cells.append(cell)
+        ws.append(header_cells)
 
         # Add data rows
-        row_idx = 1
         for run in runs:
-            row_idx += 1
             # 1. Name
             initial = run.get("initial_context") or {}
             name = initial.get("name") or initial.get("customer_name") or initial.get("first_name", "")
@@ -390,15 +388,15 @@ class DailyReportService:
             rec_url = artifact_url(token, "recording") or ""
             transcript_url = artifact_url(token, "transcript") or ""
 
-            # 9. Full Recording Text
-            logs = run.get("logs") or {}
-            if isinstance(logs, dict):
-                events = logs.get("realtime_feedback_events") or []
-                transcript_text = generate_transcript_text(events)
-            elif isinstance(logs, list):
-                transcript_text = generate_transcript_text(logs)
-            else:
-                transcript_text = ""
+            # 9. Full Recording Text (only parse logs if duration > 0)
+            transcript_text = ""
+            if duration > 0 and run.get("logs"):
+                logs = run.get("logs") or {}
+                if isinstance(logs, dict):
+                    events = logs.get("realtime_feedback_events") or []
+                    transcript_text = generate_transcript_text(events)
+                elif isinstance(logs, list):
+                    transcript_text = generate_transcript_text(logs)
 
             # 10. Intent Detection
             intent = detect_user_intent(
@@ -421,9 +419,6 @@ class DailyReportService:
                 transcript_url,
                 transcript_text
             ])
-
-            # Apply alignment (wrap text for full recording text)
-            ws.cell(row=row_idx, column=11).alignment = Alignment(wrap_text=True, vertical="top")
 
         # Write workbook to bytes
         bytes_io = BytesIO()

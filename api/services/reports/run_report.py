@@ -154,9 +154,21 @@ async def generate_usage_runs_report_excel(
         filters=filters,
     )
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Call Reports"
+    wb = openpyxl.Workbook(write_only=True)
+    ws = wb.create_sheet(title="Call Reports")
+
+    # Column widths
+    ws.column_dimensions['A'].width = 20  # Name
+    ws.column_dimensions['B'].width = 15  # Number
+    ws.column_dimensions['C'].width = 15  # Call Type
+    ws.column_dimensions['D'].width = 18  # Disposition
+    ws.column_dimensions['E'].width = 16  # Intent
+    ws.column_dimensions['F'].width = 15  # Status
+    ws.column_dimensions['G'].width = 18  # Duration
+    ws.column_dimensions['H'].width = 20  # Call Tags
+    ws.column_dimensions['I'].width = 40  # Rec URL
+    ws.column_dimensions['J'].width = 40  # Transcript URL
+    ws.column_dimensions['K'].width = 60  # Full Recording Text
 
     # Headers
     headers = [
@@ -172,29 +184,17 @@ async def generate_usage_runs_report_excel(
         "Recording Transcript URL",
         "Full Recording Text"
     ]
-    ws.append(headers)
-
-    ws.column_dimensions['A'].width = 20  # Name
-    ws.column_dimensions['B'].width = 15  # Number
-    ws.column_dimensions['C'].width = 15  # Call Type
-    ws.column_dimensions['D'].width = 18  # Disposition
-    ws.column_dimensions['E'].width = 16  # Intent
-    ws.column_dimensions['F'].width = 15  # Status
-    ws.column_dimensions['G'].width = 18  # Duration
-    ws.column_dimensions['H'].width = 20  # Call Tags
-    ws.column_dimensions['I'].width = 40  # Rec URL
-    ws.column_dimensions['J'].width = 40  # Transcript URL
-    ws.column_dimensions['K'].width = 60  # Full Recording Text
-
+    header_cells = []
     header_font = Font(name="Calibri", size=11, bold=True)
-    for col_num in range(1, 12):
-        cell = ws.cell(row=1, column=col_num)
+    header_alignment = Alignment(horizontal="center")
+    for h in headers:
+        cell = openpyxl.cell.WriteOnlyCell(ws, value=h)
         cell.font = header_font
-        cell.alignment = Alignment(horizontal="center")
+        cell.alignment = header_alignment
+        header_cells.append(cell)
+    ws.append(header_cells)
 
-    row_idx = 1
     for run in runs:
-        row_idx += 1
         # 1. Name
         initial = run.initial_context or {}
         name = initial.get("name") or initial.get("customer_name") or initial.get("first_name", "")
@@ -268,15 +268,15 @@ async def generate_usage_runs_report_excel(
         rec_url = artifact_url(token, "recording") if token else ""
         transcript_url = artifact_url(token, "transcript") if token else ""
 
-        # 8. Full Recording Text
-        logs = run.logs or {}
-        if isinstance(logs, dict):
-            events = logs.get("realtime_feedback_events") or []
-            transcript_text = generate_transcript_text(events)
-        elif isinstance(logs, list):
-            transcript_text = generate_transcript_text(logs)
-        else:
-            transcript_text = ""
+        # 8. Full Recording Text (only parse logs if call was connected / duration > 0)
+        transcript_text = ""
+        if duration > 0 and run.logs:
+            logs = run.logs or {}
+            if isinstance(logs, dict):
+                events = logs.get("realtime_feedback_events") or []
+                transcript_text = generate_transcript_text(events)
+            elif isinstance(logs, list):
+                transcript_text = generate_transcript_text(logs)
 
         # 9. Intent Detection
         intent = detect_user_intent(
@@ -299,9 +299,6 @@ async def generate_usage_runs_report_excel(
             transcript_url,
             transcript_text
         ])
-
-        # Apply alignment (wrap text for full recording text)
-        ws.cell(row=row_idx, column=11).alignment = Alignment(wrap_text=True, vertical="top")
 
     bytes_io = BytesIO()
     wb.save(bytes_io)
