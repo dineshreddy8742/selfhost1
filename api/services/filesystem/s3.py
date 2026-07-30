@@ -1,8 +1,10 @@
 from typing import Any, BinaryIO, Dict, Optional
 
 import aioboto3
+import httpx
 from botocore.config import Config
 from botocore.exceptions import ClientError
+from loguru import logger
 
 from .base import BaseFileSystem
 
@@ -59,22 +61,47 @@ class S3FileSystem(BaseFileSystem):
 
     async def acreate_file(self, file_path: str, content: BinaryIO) -> bool:
         try:
+            is_gcs = self.endpoint_url and "storage.googleapis.com" in self.endpoint_url
+            if is_gcs:
+                url = await self.aget_signed_url(file_path, expiration=3600, method="put_object")
+                if not url:
+                    return False
+                async with httpx.AsyncClient() as client:
+                    data = await content.read()
+                    response = await client.put(url, content=data)
+                    response.raise_for_status()
+                return True
+
             async with self.session.client("s3", **self._client_kwargs()) as s3_client:
                 await s3_client.put_object(
                     Bucket=self.bucket_name, Key=file_path, Body=await content.read()
                 )
             return True
-        except ClientError:
+        except Exception as e:
+            logger.error(f"Failed to create file {file_path}: {e}")
             return False
 
     async def aupload_file(self, local_path: str, destination_path: str) -> bool:
         try:
+            is_gcs = self.endpoint_url and "storage.googleapis.com" in self.endpoint_url
+            if is_gcs:
+                url = await self.aget_signed_url(destination_path, expiration=3600, method="put_object")
+                if not url:
+                    return False
+                async with httpx.AsyncClient() as client:
+                    with open(local_path, "rb") as f:
+                        data = f.read()
+                    response = await client.put(url, content=data)
+                    response.raise_for_status()
+                return True
+
             async with self.session.client("s3", **self._client_kwargs()) as s3_client:
                 await s3_client.upload_file(
                     local_path, self.bucket_name, destination_path
                 )
             return True
-        except ClientError:
+        except Exception as e:
+            logger.error(f"Failed to upload file {local_path} to {destination_path}: {e}")
             return False
 
     async def aget_signed_url(
@@ -83,8 +110,9 @@ class S3FileSystem(BaseFileSystem):
         expiration: int = 3600,
         force_inline: bool = False,
         use_internal_endpoint: bool = False,
+        method: str = "get_object",
     ) -> Optional[str]:
-        """Generate a presigned GET url for the given object.
+        """Generate a presigned url for the given object.
 
         For transcript text files we force the response headers so that the
         browser renders the content **inline** instead of triggering a file
@@ -120,12 +148,13 @@ class S3FileSystem(BaseFileSystem):
                         )
 
                 url = await s3_client.generate_presigned_url(
-                    "get_object",
+                    method,
                     Params=params,
                     ExpiresIn=expiration,
                 )
             return url
-        except ClientError:
+        except ClientError as e:
+            logger.error(f"Failed to generate presigned URL for {file_path}: {e}")
             return None
 
     async def aget_file_metadata(self, file_path: str) -> Optional[Dict[str, Any]]:

@@ -408,7 +408,19 @@ class PlivoProvider(TelephonyProvider):
             # request didn't come from Plivo (or was tampered with).
             logger.warning("Inbound Plivo webhook missing X-Plivo-Signature-V3")
             return False
-        return await self.verify_webhook_signature(url, webhook_data, signature, nonce)
+            
+        # First try with the exact URL received
+        if await self.verify_webhook_signature(url, webhook_data, signature, nonce):
+            return True
+            
+        # Cloud Run often terminates TLS and passes http:// to the application,
+        # but Plivo signed the original https:// URL.
+        if url.startswith("http://"):
+            https_url = "https://" + url[7:]
+            if await self.verify_webhook_signature(https_url, webhook_data, signature, nonce):
+                return True
+                
+        return False
 
     async def configure_inbound(
         self, address: str, webhook_url: Optional[str]

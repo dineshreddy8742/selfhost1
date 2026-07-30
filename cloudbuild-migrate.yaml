@@ -1,0 +1,9 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'us-central1-docker.pkg.dev/dailsmart-496415/dograh-repo/db-migrate:latest', '-f', 'db-migrate/Dockerfile', 'db-migrate']
+  env:
+    - 'DOCKER_BUILDKIT=1'
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'us-central1-docker.pkg.dev/dailsmart-496415/dograh-repo/db-migrate:latest']
+options:
+  machineType: 'E2_HIGHCPU_8'

@@ -5,7 +5,10 @@ from loguru import logger
 from pipecat.utils.run_context import set_current_run_id
 
 from api.db import db_client
-from api.services.storage import get_current_storage_backend, storage_fs
+from api.services.storage import (
+    get_current_storage_backend,
+    get_storage_for_backend,
+)
 from api.services.workflow_run_billing import (
     report_completed_workflow_run_platform_usage,
 )
@@ -26,6 +29,7 @@ async def _upload_temp_file(
     temp_file_path: str,
     storage_key: str,
     label: str,
+    storage,
 ) -> bool:
     try:
         if not os.path.exists(temp_file_path):
@@ -35,7 +39,7 @@ async def _upload_temp_file(
         file_size = os.path.getsize(temp_file_path)
         logger.debug(f"{label} file size: {file_size} bytes")
 
-        await storage_fs.aupload_file(temp_file_path, storage_key)
+        await storage.aupload_file(temp_file_path, storage_key)
         logger.info(f"Successfully uploaded {label}: {storage_key}")
         return True
     except Exception as e:
@@ -77,6 +81,7 @@ async def process_workflow_completion(
     logger.info(f"Processing workflow completion for run {workflow_run_id}")
 
     storage_backend = get_current_storage_backend()
+    storage = get_storage_for_backend(storage_backend.value)
 
     # Step 1: Upload audio if provided
     recordings_metadata: dict[str, dict] = {}
@@ -87,7 +92,7 @@ async def process_workflow_completion(
             f"Uploading mixed audio to {storage_backend.name} - workflow_run_id: {workflow_run_id}"
         )
         if await _upload_temp_file(
-            workflow_run_id, audio_temp_path, recording_url, "mixed audio"
+            workflow_run_id, audio_temp_path, recording_url, "mixed audio", storage
         ):
             recordings_metadata["mixed"] = _recording_metadata(
                 recording_url, storage_backend.value, "mixed"
@@ -104,7 +109,7 @@ async def process_workflow_completion(
             f"Uploading user audio to {storage_backend.name} - workflow_run_id: {workflow_run_id}"
         )
         if await _upload_temp_file(
-            workflow_run_id, user_audio_temp_path, user_recording_url, "user audio"
+            workflow_run_id, user_audio_temp_path, user_recording_url, "user audio", storage
         ):
             recordings_metadata["user"] = _recording_metadata(
                 user_recording_url, storage_backend.value, "user"
@@ -116,7 +121,7 @@ async def process_workflow_completion(
             f"Uploading bot audio to {storage_backend.name} - workflow_run_id: {workflow_run_id}"
         )
         if await _upload_temp_file(
-            workflow_run_id, bot_audio_temp_path, bot_recording_url, "bot audio"
+            workflow_run_id, bot_audio_temp_path, bot_recording_url, "bot audio", storage
         ):
             recordings_metadata["bot"] = _recording_metadata(
                 bot_recording_url, storage_backend.value, "bot"
@@ -141,7 +146,7 @@ async def process_workflow_completion(
                     f"Uploading transcript to {storage_backend.name} - workflow_run_id: {workflow_run_id}"
                 )
 
-                await storage_fs.aupload_file(transcript_temp_path, transcript_url)
+                await storage.aupload_file(transcript_temp_path, transcript_url)
                 await db_client.update_workflow_run(
                     run_id=workflow_run_id,
                     transcript_url=transcript_url,

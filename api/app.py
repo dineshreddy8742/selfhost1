@@ -143,6 +143,10 @@ api_router.include_router(main_router)
 # main router with api prefix
 app.include_router(api_router, prefix=API_PREFIX)
 
+@app.get("/")
+async def root():
+    return {"message": "Welcome to DialSmart AI API", "status": "ok", "service": "dailsmart-api"}
+
 # Mount the MCP server — agents reach it at /api/v1/mcp over Streamable HTTP,
 # authenticating with the same X-API-Key header used by the REST API.
 # Mounted under /api/v1 so existing reverse-proxy rules (nginx etc.) route it
