@@ -313,7 +313,13 @@ class WorkflowRunClient(BaseDBClient):
             # Get paginated results with filters and sorting
             order_clause = get_workflow_run_order_clause(sort_by, sort_order)
             result = await session.execute(
-                base_query.order_by(order_clause).limit(limit).offset(offset)
+                base_query.options(
+                    joinedload(WorkflowRunModel.definition),
+                    joinedload(WorkflowRunModel.workflow),
+                )
+                .order_by(order_clause)
+                .limit(limit)
+                .offset(offset)
             )
             runs = []
             for run in result.scalars().all():
@@ -323,12 +329,18 @@ class WorkflowRunClient(BaseDBClient):
                 cost = run.cost_info or {}
                 duration = float(cost.get("call_duration_seconds") or 0)
                 disposition = (run.gathered_context or {}).get("mapped_call_disposition", "")
+                wf_def = (
+                    run.definition.workflow_json
+                    if run.definition
+                    else (run.workflow.workflow_definition if run.workflow else None)
+                )
                 intent = await detect_user_intent_async(
                     gathered_context=run.gathered_context,
                     transcript_text=transcript_text,
                     disposition=disposition,
                     duration=duration,
                     organization_id=organization_id,
+                    workflow_definition=wf_def,
                 )
                 runs.append(
                     WorkflowRunResponseSchema.model_validate(
@@ -540,3 +552,46 @@ class WorkflowRunClient(BaseDBClient):
                 .limit(1)
             )
             return result.scalars().first()
+
+    async def purge_expired_runs_data(
+        self, days: int = 5, organization_id: int | None = None
+    ) -> int:
+        """Purge call logs, recording URLs, and transcript URLs older than specified days.
+
+        Keeps run metadata, duration, tokens, intent, and metrics intact while wiping
+        sensitive audio references, transcript URLs, and raw execution logs to keep
+        the account safe and storage lean.
+        """
+        from datetime import datetime, timezone, timedelta
+        from sqlalchemy import update, or_
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        async with self.async_session() as session:
+            stmt = (
+                update(WorkflowRunModel)
+                .where(WorkflowRunModel.created_at < cutoff)
+                .where(
+                    or_(
+                        WorkflowRunModel.recording_url.isnot(None),
+                        WorkflowRunModel.transcript_url.isnot(None),
+                    )
+                )
+            )
+            if organization_id:
+                stmt = stmt.where(
+                    WorkflowRunModel.workflow_id.in_(
+                        select(WorkflowModel.id).where(
+                            WorkflowModel.organization_id == organization_id
+                        )
+                    )
+                )
+            stmt = stmt.values(
+                logs={},
+                extra={},
+                recording_url=None,
+                transcript_url=None,
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+            return result.rowcount
+

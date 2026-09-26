@@ -189,7 +189,10 @@ class OrganizationUsageClient(BaseDBClient):
             total_count = count_result.scalar()
 
             results = await session.execute(
-                query.options(joinedload(WorkflowRunModel.workflow))
+                query.options(
+                    joinedload(WorkflowRunModel.workflow),
+                    joinedload(WorkflowRunModel.definition),
+                )
                 .limit(limit)
                 .offset(offset)
             )
@@ -239,12 +242,18 @@ class OrganizationUsageClient(BaseDBClient):
                 else:
                     transcript_text = ""
 
+                wf_def = (
+                    run.definition.workflow_json
+                    if run.definition
+                    else (run.workflow.workflow_definition if run.workflow else None)
+                )
                 user_intent = await detect_user_intent_async(
                     gathered_context=run.gathered_context,
                     transcript_text=transcript_text,
                     disposition=disposition,
                     duration=call_duration,
                     organization_id=organization_id,
+                    workflow_definition=wf_def,
                 )
 
                 run_data = {

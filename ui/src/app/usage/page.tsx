@@ -515,7 +515,7 @@ export default function UsagePage() {
                                                 const gc = (run.gathered_context || {}) as Record<string, any>;
                                                 const rawIntent = ((run as any).user_intent || gc.user_intent || gc.intent || gc.interest_level || gc.interest) as string | undefined;
                                                 let userIntent = rawIntent;
-                                                if (!userIntent || userIntent === 'Neutral') {
+                                                if (!userIntent) {
                                                     if (gc.user_qualified === true || run.disposition === 'user_qualified') {
                                                         userIntent = 'Interested';
                                                     } else if (gc.user_qualified === false || run.disposition === 'disqualified') {
@@ -558,21 +558,51 @@ export default function UsagePage() {
                                                          <div className="relative inline-block text-left">
                                                              {(() => {
                                                                  const currentVal = editIntentMap[run.id] || userIntent || 'Not Interested';
-                                                                 const isInterested = currentVal === 'Interested';
-                                                                 const isNotConnected = currentVal === 'Not Connected';
+                                                                 const getIntentStyle = (val: string) => {
+                                                                     const s = (val || '').toLowerCase();
+                                                                     if (s.includes('interested') && !s.includes('not')) {
+                                                                         return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25';
+                                                                     }
+                                                                     if (s.includes('positive') || s.includes('confirmed') || s.includes('qualified') || s.includes('hot')) {
+                                                                         return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25';
+                                                                     }
+                                                                     if (s.includes('not connected') || s.includes('busy') || s.includes('failed') || s.includes('canceled') || s.includes('no-answer')) {
+                                                                         return 'bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/40 hover:bg-slate-500/25';
+                                                                     }
+                                                                     if (s.includes('not interested') || s.includes('negative') || s.includes('disqualified') || s.includes('declined')) {
+                                                                         return 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/40 hover:bg-rose-500/25';
+                                                                     }
+                                                                     if (s.includes('grievance') || s.includes('complaint')) {
+                                                                         return 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/40 hover:bg-purple-500/25';
+                                                                     }
+                                                                     if (s.includes('callback') || s.includes('follow')) {
+                                                                         return 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/40 hover:bg-blue-500/25';
+                                                                     }
+                                                                     if (s.includes('neutral') || s.includes('inquiry')) {
+                                                                         return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/25';
+                                                                     }
+                                                                     return 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/25';
+                                                                 };
+
+                                                                 const intentOptions = [
+                                                                     'Interested',
+                                                                     'Not Interested',
+                                                                     'Positive',
+                                                                     'Negative',
+                                                                     'Neutral',
+                                                                     'Grievance',
+                                                                     'Callback Requested',
+                                                                     'Inquiry',
+                                                                     'Not Connected',
+                                                                 ] as const;
+
                                                                  return (
                                                                      <>
                                                                          <button
                                                                              type="button"
                                                                              onClick={() => setEditingRunId(editingRunId === run.id ? null : run.id)}
-                                                                             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer hover:scale-105 hover:shadow-sm ${
-                                                                                 isInterested
-                                                                                     ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25'
-                                                                                     : isNotConnected
-                                                                                         ? 'bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/40 hover:bg-slate-500/25'
-                                                                                         : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/40 hover:bg-rose-500/25'
-                                                                             }`}
-                                                                             title="Click to edit status"
+                                                                             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer hover:scale-105 hover:shadow-sm ${getIntentStyle(currentVal)}`}
+                                                                             title="Click to edit intent"
                                                                          >
                                                                              <span>{currentVal}</span>
                                                                              <Pencil className="h-3 w-3 opacity-70" />
@@ -583,15 +613,15 @@ export default function UsagePage() {
                                                                          )}
 
                                                                          {editingRunId === run.id && (
-                                                                             <div className="absolute top-8 left-0 z-50 bg-background border border-border rounded-lg shadow-xl py-1 min-w-[150px]">
-                                                                                 {(['Interested', 'Not Interested', 'Not Connected'] as const).map((opt) => (
+                                                                             <div className="absolute top-8 left-0 z-50 bg-background border border-border rounded-lg shadow-xl py-1 min-w-[170px] max-h-60 overflow-y-auto">
+                                                                                 {intentOptions.map((opt) => (
                                                                                      <button
                                                                                          key={opt}
                                                                                          onClick={() => handleSaveIntent(run, opt)}
                                                                                          className="flex items-center gap-2 w-full px-3 py-1.5 text-xs font-medium hover:bg-muted text-left transition-colors"
                                                                                      >
                                                                                          {currentVal === opt ? <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> : <span className="w-3.5" />}
-                                                                                         <span className={opt === 'Interested' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : opt === 'Not Interested' ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-slate-500'}>
+                                                                                         <span className={opt === 'Interested' || opt === 'Positive' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : opt === 'Not Interested' || opt === 'Negative' ? 'text-rose-600 dark:text-rose-400 font-semibold' : opt === 'Grievance' ? 'text-purple-600 dark:text-purple-400 font-semibold' : opt === 'Callback Requested' ? 'text-blue-600 dark:text-blue-400 font-semibold' : opt === 'Neutral' || opt === 'Inquiry' ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-slate-500'}>
                                                                                              {opt}
                                                                                          </span>
                                                                                      </button>
@@ -634,7 +664,7 @@ export default function UsagePage() {
                                     <div className="mt-4 p-3 bg-muted rounded-md">
                                         <p className="text-sm text-muted-foreground">
                                             Total for filtered period: <span className="font-semibold text-foreground">
-                                                {usageHistory.total_dograh_tokens.toLocaleString()} Dograh Tokens
+                                                {usageHistory.total_dograh_tokens.toLocaleString()} Dailsmart Tokens
                                             </span>
                                             {' • '}
                                             <span className="font-semibold text-foreground">

@@ -10,7 +10,7 @@ ENV_FILE="$BASE_DIR/api/.env"
 
 ARQ_WORKERS=${ARQ_WORKERS:-1}
 FASTAPI_WORKERS=${FASTAPI_WORKERS:-1}
-UVICORN_BASE_PORT=${UVICORN_BASE_PORT:-8000}
+UVICORN_BASE_PORT=${PORT:-${UVICORN_BASE_PORT:-8000}}
 
 cd "$BASE_DIR"
 echo "Starting Dograh Services (DOCKER) at $(date) in BASE_DIR: ${BASE_DIR}"
@@ -27,7 +27,7 @@ fi
 ### 2) Run migrations
 ###############################################################################
 
-alembic -c "$BASE_DIR/api/alembic.ini" upgrade head
+alembic -c "$BASE_DIR/api/alembic.ini" upgrade head || true
 
 ###############################################################################
 ### 3) Signal handling — forward TERM/INT to children for clean docker stop

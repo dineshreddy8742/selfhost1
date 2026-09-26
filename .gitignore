@@ -28,5 +28,13 @@ api/check_run.py
 scripts/deploy_fix.py
 scripts/query_db.py
 scripts/remote_fix.py
-scripts/run_remote_deploy.py
+gcp-key.json
+*.json.key
+*.sql
+*.exe
+db-migrate/
+fix_dump.py
+startup-script.sh
+vm-startup.sh
+test.txt
 

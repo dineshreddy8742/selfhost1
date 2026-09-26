@@ -15,3 +15,7 @@ evals/
 api/mcp_server/ts_validator/node_modules/
 sdk/
 venv
+dump.sql
+*.zip
+*.tar.gz
+*.exe

@@ -494,7 +494,7 @@ export type ByokPipelineAiModelConfiguration = {
         provider: 'azure';
     } & AzureLlmService) | ({
         provider: 'dograh';
-    } & DograhLlmService) | ({
+    } & DailsmartLlmService) | ({
         provider: 'aws_bedrock';
     } & AwsBedrockLlmConfiguration) | ({
         provider: 'speaches';
@@ -522,7 +522,7 @@ export type ByokPipelineAiModelConfiguration = {
         provider: 'inworld';
     } & InworldTtsConfiguration) | ({
         provider: 'dograh';
-    } & DograhTtsService) | ({
+    } & DailsmartTtsService) | ({
         provider: 'sarvam';
     } & SarvamTtsConfiguration) | ({
         provider: 'camb';
@@ -550,7 +550,7 @@ export type ByokPipelineAiModelConfiguration = {
         provider: 'google';
     } & GoogleSttConfiguration) | ({
         provider: 'dograh';
-    } & DograhSttService) | ({
+    } & DailsmartSttService) | ({
         provider: 'speechmatics';
     } & SpeechmaticsSttConfiguration) | ({
         provider: 'sarvam';
@@ -578,7 +578,7 @@ export type ByokPipelineAiModelConfiguration = {
         provider: 'azure';
     } & AzureOpenAiEmbeddingsConfiguration) | ({
         provider: 'dograh';
-    } & DograhEmbeddingsConfiguration) | null;
+    } & DailsmartEmbeddingsConfiguration) | null;
 };
 
 /**
@@ -618,7 +618,7 @@ export type ByokRealtimeAiModelConfiguration = {
         provider: 'azure';
     } & AzureLlmService) | ({
         provider: 'dograh';
-    } & DograhLlmService) | ({
+    } & DailsmartLlmService) | ({
         provider: 'aws_bedrock';
     } & AwsBedrockLlmConfiguration) | ({
         provider: 'speaches';
@@ -640,7 +640,7 @@ export type ByokRealtimeAiModelConfiguration = {
         provider: 'azure';
     } & AzureOpenAiEmbeddingsConfiguration) | ({
         provider: 'dograh';
-    } & DograhEmbeddingsConfiguration) | null;
+    } & DailsmartEmbeddingsConfiguration) | null;
     /**
      * Stt
      */
@@ -654,7 +654,7 @@ export type ByokRealtimeAiModelConfiguration = {
         provider: 'google';
     } & GoogleSttConfiguration) | ({
         provider: 'dograh';
-    } & DograhSttService) | ({
+    } & DailsmartSttService) | ({
         provider: 'speechmatics';
     } & SpeechmaticsSttConfiguration) | ({
         provider: 'sarvam';
@@ -1687,7 +1687,7 @@ export type CurrentUsageResponse = {
      */
     period_end: string;
     /**
-     * Used Dograh Tokens
+     * Used Dailsmart Tokens
      */
     used_dograh_tokens: number;
     /**
@@ -1761,7 +1761,7 @@ export type DailyUsageBreakdownResponse = {
      */
     total_cost_usd?: number | null;
     /**
-     * Total Dograh Tokens
+     * Total Dailsmart Tokens
      */
     total_dograh_tokens: number;
     /**
@@ -1787,7 +1787,7 @@ export type DailyUsageItem = {
      */
     cost_usd?: number | null;
     /**
-     * Dograh Tokens
+     * Dailsmart Tokens
      */
     dograh_tokens: number;
     /**
@@ -2087,9 +2087,9 @@ export type DocumentUploadResponseSchema = {
 };
 
 /**
- * Dograh
+ * Dailsmart
  */
-export type DograhEmbeddingsConfiguration = {
+export type DailsmartEmbeddingsConfiguration = {
     /**
      * Provider
      */
@@ -2101,15 +2101,15 @@ export type DograhEmbeddingsConfiguration = {
     /**
      * Model
      *
-     * Dograh-managed embedding model.
+     * Dailsmart-managed embedding model.
      */
     model?: string;
 };
 
 /**
- * Dograh
+ * Dailsmart
  */
-export type DograhLlmService = {
+export type DailsmartLlmService = {
     /**
      * Provider
      */
@@ -2121,15 +2121,15 @@ export type DograhLlmService = {
     /**
      * Model
      *
-     * Dograh-hosted model tier.
+     * Dailsmart-hosted model tier.
      */
     model?: string;
 };
 
 /**
- * DograhManagedAIModelConfiguration
+ * DailsmartManagedAIModelConfiguration
  */
-export type DograhManagedAiModelConfiguration = {
+export type DailsmartManagedAiModelConfiguration = {
     /**
      * Api Key
      */
@@ -2149,9 +2149,9 @@ export type DograhManagedAiModelConfiguration = {
 };
 
 /**
- * Dograh
+ * Dailsmart
  */
-export type DograhSttService = {
+export type DailsmartSttService = {
     /**
      * Provider
      */
@@ -2163,7 +2163,7 @@ export type DograhSttService = {
     /**
      * Model
      *
-     * Dograh STT tier.
+     * Dailsmart STT tier.
      */
     model?: string;
     /**
@@ -2175,9 +2175,9 @@ export type DograhSttService = {
 };
 
 /**
- * Dograh
+ * Dailsmart
  */
-export type DograhTtsService = {
+export type DailsmartTtsService = {
     /**
      * Provider
      */
@@ -2189,7 +2189,7 @@ export type DograhTtsService = {
     /**
      * Model
      *
-     * Dograh TTS tier.
+     * Dailsmart TTS tier.
      */
     model?: string;
     /**
@@ -2639,7 +2639,7 @@ export type GoogleTtsConfiguration = {
     /**
      * Model
      *
-     * Google Cloud low-latency TTS engine. Dograh maps this to Pipecat's streaming Google TTS service for Chirp 3 HD and Journey voices.
+     * Google Cloud low-latency TTS engine. Dailsmart maps this to Pipecat's streaming Google TTS service for Chirp 3 HD and Journey voices.
      */
     model?: string;
     /**
@@ -2941,7 +2941,7 @@ export type HttpApiConfig = {
     /**
      * Preset Parameters
      *
-     * Parameters injected by Dograh from fixed values or workflow context templates.
+     * Parameters injected by Dailsmart from fixed values or workflow context templates.
      */
     preset_parameters?: Array<PresetToolParameter> | null;
     /**
@@ -4006,7 +4006,7 @@ export type OrganizationAiModelConfigurationV2 = {
      * Mode
      */
     mode: 'dograh' | 'byok';
-    dograh?: DograhManagedAiModelConfiguration | null;
+    dograh?: DailsmartManagedAiModelConfiguration | null;
     byok?: ByokaiModelConfiguration | null;
 };
 
@@ -4364,7 +4364,7 @@ export type PlivoSipConfigurationResponse = {
 /**
  * PresetToolParameter
  *
- * A parameter injected by Dograh at runtime.
+ * A parameter injected by Dailsmart at runtime.
  */
 export type PresetToolParameter = {
     /**
@@ -6320,7 +6320,7 @@ export type UsageHistoryResponse = {
      */
     runs: Array<WorkflowRunUsageResponse>;
     /**
-     * Total Dograh Tokens
+     * Total Dailsmart Tokens
      */
     total_dograh_tokens: number;
     /**
@@ -7153,7 +7153,7 @@ export type WorkflowRunUsageResponse = {
      */
     created_at: string;
     /**
-     * Dograh Token Usage
+     * Dailsmart Token Usage
      */
     dograh_token_usage: number;
     /**

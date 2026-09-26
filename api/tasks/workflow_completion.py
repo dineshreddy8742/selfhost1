@@ -171,7 +171,63 @@ async def process_workflow_completion(
                 except Exception as e:
                     logger.warning(f"Failed to clean up temp transcript file: {e}")
 
-    # Step 3: Run integrations including QA analysis (after uploads are complete)
+    # Step 3: Automatically classify intent using user's configured model + agent instructions
+    try:
+        from api.utils.transcript import (
+            detect_user_intent_async,
+            generate_transcript_text,
+        )
+
+        workflow_run, org_id = await db_client.get_workflow_run_with_context(
+            workflow_run_id
+        )
+        if workflow_run:
+            logs = workflow_run.logs or {}
+            events = (
+                logs.get("realtime_feedback_events") or []
+                if isinstance(logs, dict)
+                else []
+            )
+            transcript_text = generate_transcript_text(events)
+            cost = workflow_run.cost_info or {}
+            duration = float(cost.get("call_duration_seconds") or 0)
+            disposition = (workflow_run.gathered_context or {}).get(
+                "mapped_call_disposition", ""
+            )
+            wf_def = (
+                workflow_run.definition.workflow_json
+                if workflow_run.definition
+                else (
+                    workflow_run.workflow.workflow_definition
+                    if workflow_run.workflow
+                    else None
+                )
+            )
+
+            detected_intent = await detect_user_intent_async(
+                gathered_context=workflow_run.gathered_context,
+                transcript_text=transcript_text,
+                disposition=disposition,
+                duration=duration,
+                organization_id=org_id,
+                workflow_definition=wf_def,
+            )
+            current_gc = dict(workflow_run.gathered_context or {})
+            if "user_intent" not in current_gc and detected_intent:
+                current_gc["user_intent"] = detected_intent
+                await db_client.update_workflow_run(
+                    run_id=workflow_run_id,
+                    gathered_context=current_gc,
+                )
+                logger.info(
+                    f"Saved detected user intent '{detected_intent}' for run {workflow_run_id}"
+                )
+    except Exception as e:
+        logger.warning(
+            f"Failed to auto-detect intent in post-call completion for run {workflow_run_id}: {e}"
+        )
+
+    # Step 4: Run integrations including QA analysis (after uploads are complete)
     try:
         await run_integrations_post_workflow_run(_ctx, workflow_run_id)
     except Exception as e:

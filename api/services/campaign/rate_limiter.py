@@ -94,7 +94,7 @@ class RateLimiter:
             return 1.0  # Default wait time on error
 
     async def try_acquire_concurrent_slot(
-        self, organization_id: int, max_concurrent: int = 20
+        self, organization_id: int, max_concurrent: int = 10000
     ) -> Optional[str]:
         """
         Try to acquire a concurrent call slot.

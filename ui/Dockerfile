@@ -9,7 +9,7 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++ libc6-compat
 
 # Copy package files
-COPY ui/package*.json ./
+COPY package*.json ./
 
 # Clean install with proper handling of native modules
 RUN --mount=type=cache,target=/root/.npm npm ci
@@ -25,15 +25,15 @@ RUN apk add --no-cache libc6-compat
 COPY --from=deps /app/node_modules ./node_modules
 
 # Copy all files needed for build
-COPY ui/package*.json ./
-COPY ui/tsconfig.json ./
-COPY ui/next.config.ts ./
-COPY ui/components.json ./
-COPY ui/sentry.edge.config.ts ./
-COPY ui/sentry.server.config.ts ./
-COPY ui/postcss.config.mjs ./
-COPY ui/public ./public
-COPY ui/src ./src
+COPY package*.json ./
+COPY tsconfig.json ./
+COPY next.config.ts ./
+COPY components.json ./
+COPY sentry.edge.config.ts ./
+COPY sentry.server.config.ts ./
+COPY postcss.config.mjs ./
+COPY public ./public
+COPY src ./src
 
 # Set build-time environment variables (needed for Next.js build)
 ARG NEXT_PUBLIC_BACKEND_URL

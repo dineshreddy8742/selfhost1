@@ -24,7 +24,7 @@ type ModelMode = "realtime" | "dograh" | "byok";
 // Sentinel language value for "Multilingual (Auto-detect)".
 const MULTILINGUAL_LANGUAGE_CODE = "multi";
 
-interface DograhDefaults {
+interface DailsmartDefaults {
     voices: string[];
     allow_custom_input?: boolean;
     speeds: number[];
@@ -44,7 +44,7 @@ interface DograhDefaults {
 }
 
 export interface ModelConfigurationDefaultsV2 {
-    dograh: DograhDefaults;
+    dograh: DailsmartDefaults;
     byok: {
         pipeline: ServiceConfigurationDefaults;
         realtime: {
@@ -56,7 +56,7 @@ export interface ModelConfigurationDefaultsV2 {
     };
 }
 
-interface DograhFormState {
+interface DailsmartFormState {
     api_key: string;
     voice: string;
     speed: number;
@@ -87,7 +87,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
         : null;
 }
 
-function isDograhEffectiveConfig(config: Record<string, unknown> | null | undefined): boolean {
+function isDailsmartEffectiveConfig(config: Record<string, unknown> | null | undefined): boolean {
     if (!config || config.is_realtime) return false;
     const llm = asRecord(config.llm);
     const tts = asRecord(config.tts);
@@ -167,7 +167,7 @@ function getByokInitialConfig(
         return matchesTab(byokConfiguration) ? byokConfiguration : emptyByokInitialConfig(wantRealtime);
     }
 
-    if (configuration?.mode === "dograh" || isDograhEffectiveConfig(effectiveConfiguration)) {
+    if (configuration?.mode === "dograh" || isDailsmartEffectiveConfig(effectiveConfiguration)) {
         return emptyByokInitialConfig(wantRealtime);
     }
 
@@ -175,23 +175,23 @@ function getByokInitialConfig(
     return matchesTab(effective) ? (effective as Record<string, unknown>) : emptyByokInitialConfig(wantRealtime);
 }
 
-function buildDograhState(
+function buildDailsmartState(
     defaults: ModelConfigurationDefaultsV2,
     configuration: Record<string, unknown> | null,
     effectiveConfiguration: Record<string, unknown> | null,
-): DograhFormState {
+): DailsmartFormState {
     const fallback = defaults.dograh.defaults;
-    const configuredDograh = configuration?.mode === "dograh" ? asRecord(configuration.dograh) : null;
-    if (configuredDograh) {
+    const configuredDailsmart = configuration?.mode === "dograh" ? asRecord(configuration.dograh) : null;
+    if (configuredDailsmart) {
         return {
-            api_key: String(configuredDograh.api_key || ""),
-            voice: String(configuredDograh.voice || fallback.voice),
-            speed: numberOrDefault(configuredDograh.speed, fallback.speed),
-            language: String(configuredDograh.language || fallback.language),
+            api_key: String(configuredDailsmart.api_key || ""),
+            voice: String(configuredDailsmart.voice || fallback.voice),
+            speed: numberOrDefault(configuredDailsmart.speed, fallback.speed),
+            language: String(configuredDailsmart.language || fallback.language),
         };
     }
 
-    if (isDograhEffectiveConfig(effectiveConfiguration)) {
+    if (isDailsmartEffectiveConfig(effectiveConfiguration)) {
         const llm = asRecord(effectiveConfiguration?.llm);
         const tts = asRecord(effectiveConfiguration?.tts);
         const stt = asRecord(effectiveConfiguration?.stt);
@@ -219,7 +219,7 @@ function preferredMode(
     if (configuration?.mode === "byok") {
         return asRecord(configuration.byok)?.mode === "realtime" ? "realtime" : "byok";
     }
-    if (isDograhEffectiveConfig(effectiveConfiguration)) return "dograh";
+    if (isDailsmartEffectiveConfig(effectiveConfiguration)) return "dograh";
     return Boolean(effectiveConfiguration?.is_realtime) ? "realtime" : "byok";
 }
 
@@ -275,7 +275,7 @@ export function AIModelConfigurationV2Editor({
 }: AIModelConfigurationV2EditorProps) {
     const defaultsForByok = useMemo(() => byokDefaults(defaults), [defaults]);
     const [mode, setMode] = useState<ModelMode>("dograh");
-    const [dograh, setDograh] = useState<DograhFormState>(() => ({
+    const [dograh, setDailsmart] = useState<DailsmartFormState>(() => ({
         api_key: "",
         voice: defaults.dograh.defaults.voice,
         speed: defaults.dograh.defaults.speed,
@@ -283,7 +283,7 @@ export function AIModelConfigurationV2Editor({
     }));
     const [realtimeInitialConfig, setRealtimeInitialConfig] = useState<Record<string, unknown> | null>(null);
     const [pipelineInitialConfig, setPipelineInitialConfig] = useState<Record<string, unknown> | null>(null);
-    const [isSavingDograh, setIsSavingDograh] = useState(false);
+    const [isSavingDailsmart, setIsSavingDailsmart] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const allowCustomVoice = defaults.dograh.allow_custom_input ?? false;
@@ -298,14 +298,14 @@ export function AIModelConfigurationV2Editor({
         const rawConfiguration = asRecord(configuration);
         const rawEffectiveConfiguration = asRecord(effectiveConfiguration);
         setMode(preferredMode(rawConfiguration, rawEffectiveConfiguration));
-        const nextDograh = buildDograhState(defaults, rawConfiguration, rawEffectiveConfiguration);
-        setDograh(nextDograh);
+        const nextDailsmart = buildDailsmartState(defaults, rawConfiguration, rawEffectiveConfiguration);
+        setDailsmart(nextDailsmart);
         setRealtimeInitialConfig(getByokInitialConfig(rawConfiguration, rawEffectiveConfiguration, true));
         setPipelineInitialConfig(getByokInitialConfig(rawConfiguration, rawEffectiveConfiguration, false));
     }, [configuration, defaults, effectiveConfiguration, allowCustomVoice]);
 
-    const saveDograhConfiguration = async () => {
-        setIsSavingDograh(true);
+    const saveDailsmartConfiguration = async () => {
+        setIsSavingDailsmart(true);
         setError(null);
         try {
             if (
@@ -314,7 +314,7 @@ export function AIModelConfigurationV2Editor({
                 || dograh.speed > dograhSpeedRange.max
             ) {
                 throw new Error(
-                    `Dograh speed must be between ${dograhSpeedRange.min} and ${dograhSpeedRange.max}.`,
+                    `Dailsmart speed must be between ${dograhSpeedRange.min} and ${dograhSpeedRange.max}.`,
                 );
             }
             await onSave({
@@ -330,7 +330,7 @@ export function AIModelConfigurationV2Editor({
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to save configuration");
         } finally {
-            setIsSavingDograh(false);
+            setIsSavingDailsmart(false);
         }
     };
 
@@ -406,14 +406,14 @@ export function AIModelConfigurationV2Editor({
                                     <VoiceSelectorModal
                                         provider="dograh"
                                         value={dograh.voice}
-                                        onChange={(voice) => setDograh({ ...dograh, voice })}
+                                        onChange={(voice) => setDailsmart({ ...dograh, voice })}
                                         allowManualInput={allowCustomVoice}
                                     />
                                 </div>
 
                                 <div className="space-y-2 sm:col-span-2">
                                     <Label>Language</Label>
-                                    <Select value={dograh.language} onValueChange={(language) => setDograh({ ...dograh, language })}>
+                                    <Select value={dograh.language} onValueChange={(language) => setDailsmart({ ...dograh, language })}>
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Select language" />
                                         </SelectTrigger>
@@ -443,7 +443,7 @@ export function AIModelConfigurationV2Editor({
                                         value={dograh.speed}
                                         onChange={(event) => {
                                             const speed = event.currentTarget.valueAsNumber;
-                                            setDograh({
+                                            setDailsmart({
                                                 ...dograh,
                                                 speed: Number.isFinite(speed) ? speed : defaults.dograh.defaults.speed,
                                             });
@@ -459,16 +459,16 @@ export function AIModelConfigurationV2Editor({
                                             id="dograh-api-key"
                                             className="pl-9"
                                             value={dograh.api_key}
-                                            onChange={(event) => setDograh({ ...dograh, api_key: event.target.value })}
+                                            onChange={(event) => setDailsmart({ ...dograh, api_key: event.target.value })}
                                             placeholder="Enter API key"
                                         />
                                     </div>
                                 </div>
                             </div>
 
-                            <Button type="button" className="mt-6 w-full" onClick={saveDograhConfiguration} disabled={isSavingDograh}>
+                            <Button type="button" className="mt-6 w-full" onClick={saveDailsmartConfiguration} disabled={isSavingDailsmart}>
                                 <Save className="mr-2 h-4 w-4" />
-                                {isSavingDograh ? "Saving..." : submitLabel}
+                                {isSavingDailsmart ? "Saving..." : submitLabel}
                             </Button>
                         </CardContent>
                     </Card>

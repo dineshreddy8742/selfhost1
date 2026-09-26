@@ -38,7 +38,7 @@ export function MediaPreviewDialog() {
 
             const [audioResult, transcriptResult] = await Promise.all([
                 recordingUrl ? getSignedUrl(recordingUrl) : null,
-                transcriptUrl ? getSignedUrl(transcriptUrl, true) : null,
+                transcriptUrl ? getSignedUrl(transcriptUrl, false) : null,
             ]);
 
             if (audioResult) {
@@ -102,9 +102,14 @@ export function MediaPreviewDialog() {
                     )}
 
                     {!mediaLoading && transcriptContent && (
-                        <pre className="w-full h-[60vh] overflow-auto border rounded-md mt-4 p-4 bg-muted text-sm whitespace-pre-wrap font-mono">
-                            {transcriptContent}
-                        </pre>
+                        <div className="w-full mt-4 flex flex-col gap-1.5">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                Call Transcript
+                            </span>
+                            <div className="w-full max-h-[50vh] overflow-y-auto border rounded-md p-4 bg-muted/40 text-sm whitespace-pre-wrap font-sans leading-relaxed text-foreground select-text">
+                                {transcriptContent}
+                            </div>
+                        </div>
                     )}
 
                     {!mediaLoading && !audioSignedUrl && !transcriptContent && (

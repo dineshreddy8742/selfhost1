@@ -39,23 +39,98 @@ def generate_transcript_text(events: List[dict]) -> str:
     return "".join(lines)
 
 
+def extract_workflow_instructions(workflow_definition: dict | None) -> str:
+    """Extract a concise summary of the agent's persona, node prompts, and transition conditions."""
+    if not isinstance(workflow_definition, dict):
+        return ""
+
+    parts: list[str] = []
+    nodes = workflow_definition.get("nodes") or []
+    edges = workflow_definition.get("edges") or []
+
+    # 1. Global / persona instructions
+    for node in nodes:
+        node_type = str(node.get("type", "")).lower()
+        node_data = node.get("data") or {}
+        if "global" in node_type or node_data.get("global_prompt"):
+            prompt = (
+                node_data.get("prompt")
+                or node_data.get("text")
+                or node_data.get("global_prompt")
+                or ""
+            ).strip()
+            if prompt:
+                parts.append(f"Global Persona & Guidelines:\n{prompt}")
+
+    # 2. Start Call / Agent nodes
+    node_prompts = []
+    for node in nodes:
+        node_type = str(node.get("type", "")).lower()
+        if "global" in node_type:
+            continue
+        node_data = node.get("data") or {}
+        name = node_data.get("name") or node.get("id") or "Step"
+        prompt = (
+            node_data.get("prompt")
+            or node_data.get("text")
+            or node_data.get("instructions")
+            or ""
+        ).strip()
+        if prompt:
+            trimmed_prompt = prompt[:500] if len(prompt) > 500 else prompt
+            node_prompts.append(f"[{name}]: {trimmed_prompt}")
+
+    if node_prompts:
+        parts.append("Agent Prompts & Flow:\n" + "\n".join(node_prompts[:4]))
+
+    # 3. Decision branches / transition conditions
+    conditions = []
+    for edge in edges:
+        edge_data = edge.get("data") or {}
+        label = edge_data.get("label") or edge_data.get("condition") or edge.get("label")
+        if label and isinstance(label, str) and label.strip():
+            conditions.append(label.strip())
+
+    if conditions:
+        unique_conds = list(dict.fromkeys(conditions))[:6]
+        parts.append("Expected Outcomes / Branch Conditions:\n- " + "\n- ".join(unique_conds))
+
+    full_instructions = "\n\n".join(parts)
+    return full_instructions[:1500]
+
+
 async def _analyze_intent_with_llm(
     transcript_text: str,
     organization_id: int | None = None,
+    agent_instructions: str | None = None,
 ) -> str | None:
     """Use the exact LLM provider, model, and API key configured by the user in the Models Page to classify transcript intent."""
     if not organization_id:
         return None
 
+    instructions_block = ""
+    if agent_instructions and agent_instructions.strip():
+        instructions_block = (
+            f"Agent Role, Purpose & Guidelines:\n{agent_instructions.strip()}\n\n"
+        )
+
     prompt = (
-        "You are an expert voice call transcript intent classifier.\n"
-        "Analyze the user's spoken words and answers in the following call transcript across any language (Telugu, Hindi, English, etc.).\n\n"
-        f"Transcript:\n{transcript_text}\n\n"
+        "You are an expert voice call evaluator and user intent classifier.\n"
+        "Analyze the user's spoken words, tone, and answers in the following call transcript across any language (Telugu, Hindi, English, etc.).\n\n"
+        f"{instructions_block}"
+        f"Call Transcript:\n{transcript_text}\n\n"
         "Instructions:\n"
-        "Classify the caller's intent into exactly ONE of these two categories:\n"
-        "- Interested: The caller engaged constructively, answered questions, asked for details/pricing, agreed to talk or receive info, or showed curiosity/openness.\n"
-        "- Not Interested: The caller explicitly declined (e.g. 'vaddhu', 'voddhu', 'nakko', 'not interested', 'don't call', 'nahi chahiye'), hung up abruptly without interest, or expressed unwillingness.\n\n"
-        "Respond ONLY with the exact words 'Interested' or 'Not Interested'."
+        "Evaluate the user's responses in relation to the agent's goals and guidelines above.\n"
+        "Classify the caller's intent or outcome into the single most accurate, appropriate category:\n"
+        "- 'Interested': The caller agreed, engaged constructively, wanted details/service/quote/demo, or responded positively to the agent's offer.\n"
+        "- 'Not Interested': The caller declined, refused, said they don't need it ('vaddhu', 'voddhu', 'nakko', 'nahi chahiye', 'stop calling', 'not interested'), or hung up abruptly without interest.\n"
+        "- 'Positive': The caller provided praise, high satisfaction, or strong approval.\n"
+        "- 'Negative': The caller expressed disappointment, dissatisfaction, or negative sentiment.\n"
+        "- 'Neutral': The caller was non-committal, acknowledged information without interest or disinterest.\n"
+        "- 'Grievance': The caller raised a specific complaint, defect, issue, or dispute needing escalation.\n"
+        "- 'Callback Requested': The caller requested to be contacted later or was busy.\n"
+        "- 'Inquiry': The caller asked clarifying questions or sought information.\n\n"
+        "Respond ONLY with the exact single category name from above (or a concise 1-2 word intent label matching the outcome). Do not include any explanations or punctuation."
     )
 
     api_key = None
@@ -107,13 +182,15 @@ async def _analyze_intent_with_llm(
         return None
 
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             prov_lower = provider.lower()
-            if "gemini" in prov_lower and "openrouter" not in prov_lower:
+            content = ""
+
+            if "gemini" in prov_lower or "google" in prov_lower and "vertex" not in prov_lower and "openrouter" not in prov_lower:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
                 payload = {
                     "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.0, "maxOutputTokens": 10},
+                    "generationConfig": {"temperature": 0.0, "maxOutputTokens": 20},
                 }
                 resp = await client.post(url, json=payload)
                 if resp.status_code == 200:
@@ -125,12 +202,33 @@ async def _analyze_intent_with_llm(
                         .get("text", "")
                         .strip()
                     )
-                    if "Not Interested" in content:
-                        return "Not Interested"
-                    if "Interested" in content:
-                        return "Interested"
+            elif "sarvam" in prov_lower:
+                # Sarvam AI chat completion
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "api-subscription-key": api_key,
+                    "Content-Type": "application/json",
+                }
+                payload = {
+                    "model": model or "sarvam-30b",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.0,
+                    "max_tokens": 20,
+                }
+                url = base_url or "https://api.sarvam.ai/v1/chat/completions"
+                if not url.endswith("/chat/completions"):
+                    url = url.rstrip("/") + "/chat/completions"
+                resp = await client.post(url, json=payload, headers=headers)
+                if resp.status_code == 200:
+                    result_data = resp.json()
+                    content = (
+                        result_data.get("choices", [{}])[0]
+                        .get("message", {})
+                        .get("content", "")
+                        .strip()
+                    )
             else:
-                # OpenRouter, OpenAI, Groq, Anthropic, or any OpenAI-compatible provider selected by user
+                # OpenRouter, OpenAI, Groq, Azure, or any OpenAI-compatible provider selected by user
                 headers = {
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
@@ -139,9 +237,15 @@ async def _analyze_intent_with_llm(
                     "model": model,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.0,
-                    "max_tokens": 10,
+                    "max_tokens": 20,
                 }
-                url = base_url or ("https://openrouter.ai/api/v1/chat/completions" if "openrouter" in prov_lower else "https://api.openai.com/v1/chat/completions")
+                url = base_url or (
+                    "https://openrouter.ai/api/v1/chat/completions"
+                    if "openrouter" in prov_lower
+                    else "https://api.groq.com/openai/v1/chat/completions"
+                    if "groq" in prov_lower
+                    else "https://api.openai.com/v1/chat/completions"
+                )
                 if url and not url.endswith("/chat/completions") and "generativelanguage" not in url:
                     url = url.rstrip("/") + "/chat/completions"
 
@@ -154,10 +258,28 @@ async def _analyze_intent_with_llm(
                         .get("content", "")
                         .strip()
                     )
-                    if "Not Interested" in content:
-                        return "Not Interested"
-                    if "Interested" in content:
-                        return "Interested"
+
+            if content:
+                clean_content = content.replace("*", "").replace('"', '').replace("'", "").strip()
+                # Check standard categories
+                for cat in [
+                    "Not Interested",
+                    "Interested",
+                    "Callback Requested",
+                    "Positive",
+                    "Negative",
+                    "Neutral",
+                    "Grievance",
+                    "Inquiry",
+                    "Confirmed",
+                ]:
+                    if cat.lower() in clean_content.lower():
+                        return cat
+
+                # Clean short 1-3 word classification
+                words = clean_content.split()
+                if 0 < len(words) <= 3 and len(clean_content) <= 30:
+                    return clean_content.title()
     except Exception as err:
         logger.warning(f"LLM intent classification failed with model '{model}': {err}")
 
@@ -170,11 +292,13 @@ async def detect_user_intent_async(
     disposition: str | None = None,
     duration: float = 0.0,
     organization_id: int | None = None,
+    agent_instructions: str | None = None,
+    workflow_definition: dict | None = None,
 ) -> str:
     """Async intent detection utilizing LLM transcript analysis with multi-lingual awareness."""
     gathered = gathered_context or {}
 
-    # 0. Check manual user override (stored in gathered_context) - HIGHEST PRECEDENCE
+    # 0. Check manual user override or previously stored intent - HIGHEST PRECEDENCE
     explicit_intent = (
         gathered.get("user_intent")
         or gathered.get("intent")
@@ -183,15 +307,10 @@ async def detect_user_intent_async(
     )
     if isinstance(explicit_intent, str) and explicit_intent.strip():
         val = explicit_intent.strip()
-        if val in ("Interested", "Not Interested", "Not Connected"):
-            return val
         val_lower = val.lower()
         if val_lower in ("not connected", "not_connected"):
             return "Not Connected"
-        if any(k in val_lower for k in ["not interested", "uninterested", "disqualified", "no_interest", "rejected", "not_interested"]):
-            return "Not Interested"
-        if any(k in val_lower for k in ["interested", "qualified", "high", "positive", "hot", "warm"]):
-            return "Interested"
+        return val
 
     disposition_clean = (disposition or "").lower().strip()
 
@@ -217,22 +336,29 @@ async def detect_user_intent_async(
     ):
         return "Not Interested"
 
-    # 3. Try LLM Intent Analysis on User's Spoken Sentences
+    # 2. Extract agent instructions from workflow definition if not explicitly passed
+    if not agent_instructions and workflow_definition:
+        agent_instructions = extract_workflow_instructions(workflow_definition)
+
+    # 3. Try LLM Intent Analysis on Transcript
     if transcript_text and len(transcript_text.strip()) > 5:
-        user_lines = [
-            line.strip()
-            for line in transcript_text.split("\n")
-            if line.strip().lower().startswith(("user:", "caller:", "human:"))
-            or " user: " in line.strip().lower()
-        ]
-        # If the user NEVER spoke a single word (e.g. only assistant spoke before hangup):
-        if not user_lines:
+        text_lower = transcript_text.lower()
+        # Check if the user/caller actually spoke any words in the conversation
+        has_user_speech = any(
+            marker in text_lower
+            for marker in ["user:", "caller:", "human:", "speaker 1:", "[user]", "speaker 0:"]
+        )
+        if not has_user_speech:
+            # If the user NEVER spoke a single word (e.g. only assistant spoke before hangup):
             return "Not Interested"
 
-        # Pass ONLY the user's spoken sentences to the LLM
-        user_spoken_transcript = "\n".join(user_lines)
-        llm_intent = await _analyze_intent_with_llm(user_spoken_transcript, organization_id)
-        if llm_intent in ("Interested", "Not Interested"):
+        # Pass full transcript context so the LLM knows what questions the user answered
+        llm_intent = await _analyze_intent_with_llm(
+            transcript_text=transcript_text,
+            organization_id=organization_id,
+            agent_instructions=agent_instructions,
+        )
+        if llm_intent:
             return llm_intent
 
     # 4. Fallback if no LLM or un-answered

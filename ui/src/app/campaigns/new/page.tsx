@@ -247,16 +247,12 @@ export default function NewCampaignPage() {
         // Validate max_concurrency if provided
         const maxConcurrencyValue = maxConcurrency ? parseInt(maxConcurrency) : null;
         if (maxConcurrencyValue !== null) {
-            if (isNaN(maxConcurrencyValue) || maxConcurrencyValue < 1 || maxConcurrencyValue > 100) {
-                toast.error('Max concurrent calls must be between 1 and 100');
+            if (isNaN(maxConcurrencyValue) || maxConcurrencyValue < 1 || maxConcurrencyValue > 10000) {
+                toast.error('Max concurrent calls must be between 1 and 10000');
                 return;
             }
-            if (maxConcurrencyValue > effectiveLimit) {
-                if (availableFromNumbersCount > 0 && availableFromNumbersCount < orgConcurrentLimit) {
-                    toast.error(`Max concurrent calls cannot exceed ${effectiveLimit}. The selected configuration has ${availableFromNumbersCount} phone number(s) - add more CLIs to increase concurrency.`);
-                } else {
-                    toast.error(`Max concurrent calls cannot exceed organization limit (${effectiveLimit})`);
-                }
+            if (orgConcurrentLimit && maxConcurrencyValue > orgConcurrentLimit) {
+                toast.error(`Max concurrent calls cannot exceed organization limit (${orgConcurrentLimit})`);
                 return;
             }
         }

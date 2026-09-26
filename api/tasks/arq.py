@@ -44,9 +44,11 @@ from api.tasks.campaign_tasks import (
     sync_campaign_source,
 )
 from api.tasks.knowledge_base_processing import process_knowledge_base_document
+from api.tasks.retention_tasks import purge_5day_expired_data
 from api.tasks.run_integrations import run_integrations_post_workflow_run
 from api.tasks.s3_upload import upload_voicemail_audio_to_s3
 from api.tasks.workflow_completion import process_workflow_completion
+from arq.cron import cron
 
 
 class WorkerSettings:
@@ -57,8 +59,11 @@ class WorkerSettings:
         sync_campaign_source,
         process_campaign_batch,
         process_knowledge_base_document,
+        purge_5day_expired_data,
     ]
-    cron_jobs = []
+    cron_jobs = [
+        cron(purge_5day_expired_data, hour=3, minute=0),  # Daily auto-cleanup of logs and recordings older than 5 days
+    ]
     redis_settings = REDIS_SETTINGS
     max_jobs = 10
 

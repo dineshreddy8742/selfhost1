@@ -1398,6 +1398,21 @@ async def update_run_intent(
     return {"id": run_id, "intent": request.intent}
 
 
+@router.post("/runs/purge-expired")
+async def purge_expired_runs(
+    days: int = Query(5, ge=1, le=365, description="Number of days to keep before purging"),
+    user: UserModel = Depends(get_user_with_selected_organization),
+):
+    """Purge call logs, recording URLs, and transcript URLs older than specified days (default 5 days)."""
+    org_id = getattr(user, "selected_organization_id", None)
+    purged_count = await db_client.purge_expired_runs_data(days=days, organization_id=org_id)
+    return {
+        "status": "success",
+        "purged_runs_count": purged_count,
+        "retention_days": days,
+        "message": f"Successfully purged call logs, recordings, and transcripts older than {days} days.",
+    }
+
 
 class WorkflowRunsResponse(BaseModel):
     runs: List[WorkflowRunResponseSchema]

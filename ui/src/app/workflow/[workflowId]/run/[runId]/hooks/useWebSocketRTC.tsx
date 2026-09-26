@@ -162,7 +162,7 @@ export const useWebSocketRTC = ({ workflowId, workflowRunId, accessToken, initia
             const localhostApiReachable = await probeLocalhostApi();
 
             if (!localhostApiReachable) {
-                throw new Error('Dograh API is not reachable at http://localhost:8000. Ensure the api container is running and port 8000 is published.');
+                throw new Error('Dailsmart API is not reachable at http://localhost:8000. Ensure the api container is running and port 8000 is published.');
             }
 
             baseUrl = LOCALHOST_API_BASE_URL;

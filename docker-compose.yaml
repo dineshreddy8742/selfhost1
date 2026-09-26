@@ -250,8 +250,8 @@ services:
   ui:
     image: ${REGISTRY:-dograhai}/dograh-ui:latest
     build:
-      context: .
-      dockerfile: ui/Dockerfile
+      context: ./ui
+      dockerfile: Dockerfile
     environment:
       # Bind the Next.js standalone server to all interfaces
       HOSTNAME: "0.0.0.0"
@@ -316,7 +316,7 @@ services:
       - ./config/asterisk/pjsip.d:/etc/asterisk/pjsip.d
     ports:
       - "5060:5060/udp"
-      - "10000-10099:10000-10099/udp"
+      - "10000-10010:10000-10010/udp"
     networks:
       - app-network
 

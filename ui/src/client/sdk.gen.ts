@@ -957,7 +957,7 @@ export const unarchiveToolApiV1ToolsToolUuidUnarchivePost = <ThrowOnError extend
 /**
  * Get Current Organization Context
  *
- * Return organization-scoped configuration signals owned by Dograh.
+ * Return organization-scoped configuration signals owned by Dailsmart.
  */
 export const getCurrentOrganizationContextApiV1OrganizationsContextGet = <ThrowOnError extends boolean = false>(options?: Options<GetCurrentOrganizationContextApiV1OrganizationsContextGetData, ThrowOnError>) => (options?.client ?? client).get<GetCurrentOrganizationContextApiV1OrganizationsContextGetResponses, GetCurrentOrganizationContextApiV1OrganizationsContextGetErrors, ThrowOnError>({ url: '/api/v1/organizations/context', ...options });
 
@@ -1302,7 +1302,7 @@ export const getBillingCreditsApiV1OrganizationsBillingCreditsGet = <ThrowOnErro
 /**
  * Create Mps Credit Purchase Url
  *
- * Create a checkout URL for organizations using Dograh-managed MPS v2.
+ * Create a checkout URL for organizations using Dailsmart-managed MPS v2.
  */
 export const createMpsCreditPurchaseUrlApiV1OrganizationsUsageMpsCreditsPurchaseUrlPost = <ThrowOnError extends boolean = false>(options?: Options<CreateMpsCreditPurchaseUrlApiV1OrganizationsUsageMpsCreditsPurchaseUrlPostData, ThrowOnError>) => (options?.client ?? client).post<CreateMpsCreditPurchaseUrlApiV1OrganizationsUsageMpsCreditsPurchaseUrlPostResponses, CreateMpsCreditPurchaseUrlApiV1OrganizationsUsageMpsCreditsPurchaseUrlPostErrors, ThrowOnError>({ url: '/api/v1/organizations/usage/mps-credits/purchase-url', ...options });
 

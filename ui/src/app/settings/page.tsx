@@ -41,7 +41,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle>MCP Server</CardTitle>
             <CardDescription>
-              Let AI agents access your Dograh workspace and documentation via
+              Let AI agents access your Dailsmart workspace and documentation via
               the Model Context Protocol.
             </CardDescription>
           </CardHeader>
