@@ -1,11 +1,8 @@
 // Shared dark two-column auth shell, used by BOTH the Stack Auth handler
 // (/handler/[...stack], cloud) and the local/OSS auth pages (/auth/login,
 // /auth/signup). LEFT: a centered card that wraps the auth form (`children`).
-// RIGHT (lg+ only): a brand/value panel with the Dailsmart logo, proof points, and
-// a Bland-style enterprise CTA block at the bottom (passed in as `enterpriseSlot`).
-// Mobile collapses to the single card column. The form column scrolls and stays
-// centered so tall (sign-up) forms never clip on short viewports. Palette is the
-// app's blacks/greys with one warm CTA accent.
+// RIGHT (lg+ only): a brand/value panel with the Dailsmart logo and proof points.
+// Mobile collapses to the single card column.
 
 import type { ReactNode } from "react";
 
@@ -19,7 +16,7 @@ const HIGHLIGHTS = [
 
 export function AuthShell({
   children,
-  enterpriseSlot,
+  enterpriseSlot: _enterpriseSlot,
 }: {
   children: ReactNode;
   enterpriseSlot?: ReactNode;
@@ -69,18 +66,8 @@ export function AuthShell({
           </ul>
         </div>
 
-        {/* Enterprise CTA block (Bland-style) — bottom margin lifts it off the
-            viewport edge while justify-between keeps the column layout */}
-        <div className="relative mb-12 max-w-md space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-5 xl:mb-16">
-          <h2 className="text-sm font-semibold text-zinc-100">
-            Need on-prem, data residency &amp; a data perimeter?
-          </h2>
-          <p className="text-sm text-zinc-400">
-            We deploy Dailsmart inside your environment for regulated and
-            high-scale teams.
-          </p>
-          {enterpriseSlot}
-        </div>
+        {/* Spacer to keep layout consistent */}
+        <div className="mb-12 xl:mb-16" />
       </aside>
     </div>
   );

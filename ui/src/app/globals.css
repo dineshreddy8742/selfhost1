@@ -133,6 +133,10 @@
     @apply border-border outline-ring/50;
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-background text-foreground;
     background-image: 
@@ -140,6 +144,29 @@
       radial-gradient(ellipse 50% 40% at 5% 90%, rgba(249, 115, 22, 0.04), transparent 55%);
     background-attachment: fixed;
     background-repeat: no-repeat;
+    /* Hide default scrollbar — replaced by custom thin one below */
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.63 0.22 42 / 0.35) transparent;
+  }
+
+  /* Custom thin scrollbar for all scrollable elements */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.63 0.22 42 / 0.30);
+    border-radius: 999px;
+    transition: background 0.2s;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.63 0.22 42 / 0.60);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   .dark body {
