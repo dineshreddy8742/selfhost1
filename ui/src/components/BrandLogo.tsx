@@ -1,4 +1,12 @@
+import Image from "next/image";
+
 import { cn } from "@/lib/utils";
+
+// DailSmart brand logo — uses the official ds* circular mark.
+// Modes:
+//   mark=true  → icon only (sidebar collapsed / icon-only contexts)
+//   default    → icon + "DailSmart" wordmark  (auth light panel)
+//   inverse    → icon + white wordmark         (auth dark panel)
 
 export function BrandLogo({
   className,
@@ -9,25 +17,36 @@ export function BrandLogo({
   inverse?: boolean;
   mark?: boolean;
 }) {
-  const logoColor = inverse ? "text-white" : "text-foreground";
-  
+  const textColor = inverse ? "text-white" : "text-foreground";
+
   if (mark) {
+    // Icon-only: used in sidebar header (collapsed or alongside nav links)
     return (
-      <div className={cn("flex items-center gap-1.5", className)}>
-        <svg className="h-6 w-6 text-cta" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2v20M17 5v14M22 9v6M7 5v14M2 9v6" />
-        </svg>
+      <div className={cn("flex items-center", className)}>
+        <Image
+          src="/dailsmart-logo.png"
+          alt="DailSmart"
+          width={32}
+          height={32}
+          className="rounded-full object-cover"
+          priority
+        />
       </div>
     );
   }
 
   return (
-    <div className={cn("flex items-center gap-2 font-bold tracking-tight select-none", className)}>
-      <svg className="h-6 w-6 text-cta animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2v20M17 5v14M22 9v6M7 5v14M2 9v6" />
-      </svg>
-      <span className={cn("text-lg font-extrabold tracking-tight", logoColor)}>
-        Dailsmart <span className="text-cta">AI</span>
+    <div className={cn("flex items-center gap-2.5 select-none", className)}>
+      <Image
+        src="/dailsmart-logo.png"
+        alt="DailSmart"
+        width={32}
+        height={32}
+        className="rounded-full object-cover shrink-0"
+        priority
+      />
+      <span className={cn("text-lg font-extrabold tracking-tight leading-none", textColor)}>
+        Dail<span className="text-cta">Smart</span>
       </span>
     </div>
   );
