@@ -123,14 +123,14 @@ async def _analyze_intent_with_llm(
         "Carefully evaluate what the AI asked and what the user replied in context.\n"
         "Classify the caller's intent or outcome into the single most accurate, appropriate category:\n"
         "- 'Interested': The caller agreed, engaged constructively, answered questions/survey cooperatively, wanted details/service/quote/demo, or responded positively to the agent's offer.\n"
-        "- 'Not Interested': The caller explicitly declined, refused, said they don't need it ('vaddhu', 'voddhu', 'nakko', 'nahi chahiye', 'stop calling', 'not interested'), or hung up abruptly with clear refusal.\n"
+        "- 'Did Not Speak': The caller connected but remained silent, did not speak any words, or disconnected without speaking.\n"
         "- 'Positive': The caller provided praise, high satisfaction, or strong approval.\n"
         "- 'Negative': The caller expressed disappointment, dissatisfaction, or negative sentiment.\n"
-        "- 'Neutral': The caller was non-committal, acknowledged information without interest or disinterest, or gave routine answers.\n"
+        "- 'Neutral': The caller was non-committal, acknowledged information without interest or disinterest, or gave routine answers/greetings like 'hello'.\n"
         "- 'Grievance': The caller raised a specific complaint, defect, issue, or dispute needing escalation.\n"
         "- 'Callback Requested': The caller requested to be contacted later or was busy/driving.\n"
         "- 'Inquiry': The caller asked clarifying questions or sought information.\n"
-        "- 'Not Connected': The call was dropped, silent, or no meaningful user participation occurred.\n\n"
+        "- 'Not Connected': The call failed to connect, was busy, no-answer, or 0s duration.\n\n"
         "Respond ONLY with the exact single category name from above. Do not include any explanations, markdown, or punctuation."
     )
 
@@ -310,6 +310,7 @@ async def _analyze_intent_with_llm(
                 # Check standard categories
                 for cat in [
                     "Not Interested",
+                    "Did Not Speak",
                     "Interested",
                     "Callback Requested",
                     "Positive",
@@ -364,44 +365,51 @@ async def detect_user_intent_async(
 
     disposition_clean = (disposition or "").lower().strip()
 
-    # 1. Check if call was disconnected / not answered / short abort
-    if (duration <= 0 or duration < 12.0) and disposition_clean in (
+    # 1. Unconnected calls (0s duration, busy, no-answer, failed, canceled)
+    # Strictly reserved for 0-second / failed calls
+    if duration <= 0 or disposition_clean in (
         "busy",
         "no-answer",
         "failed",
         "canceled",
         "cancelled",
         "initialized",
-        "user_idle_max_duration_exceeded",
     ):
         return "Not Connected"
 
-    # 2. Extract agent instructions from workflow definition if not explicitly passed
-    if not agent_instructions and workflow_definition:
-        agent_instructions = extract_workflow_instructions(workflow_definition)
-
-    # 3. Analyze Transcript with AI
+    # 2. Check if user actually spoke on this connected call
+    has_user_speech = False
     if transcript_text and len(transcript_text.strip()) > 5:
         text_lower = transcript_text.lower()
         has_user_speech = any(
             marker in text_lower
             for marker in ["user:", "caller:", "human:", "speaker 1:", "[user]", "speaker 0:"]
         )
-        if not has_user_speech:
-            # If the user NEVER spoke a single word (e.g. only assistant spoke before hangup or test drop):
-            # Never label an unanswered / dropped call as "Not Interested"!
-            return "Not Connected"
 
-        # Pass full conversation context to LLM
+    # If call connected (duration > 0) but user NEVER spoke: show "Did Not Speak"
+    if not has_user_speech:
+        return "Did Not Speak"
+
+    # 3. Extract agent instructions from workflow definition if not explicitly passed
+    if not agent_instructions and workflow_definition:
+        agent_instructions = extract_workflow_instructions(workflow_definition)
+
+    # 4. Analyze Transcript with AI
+    if transcript_text and len(transcript_text.strip()) > 5:
         llm_intent = await _analyze_intent_with_llm(
             transcript_text=transcript_text,
             organization_id=organization_id,
             agent_instructions=agent_instructions,
         )
         if llm_intent:
+            # Prevent connected speaking calls from being labeled Not Connected or Did Not Speak
+            if llm_intent == "Not Connected":
+                return "Neutral"
+            if llm_intent == "Did Not Speak" and has_user_speech:
+                return "Neutral"
             return llm_intent
 
-    # 4. Fallback heuristic
+    # 5. Fallback heuristic
     if transcript_text and len(transcript_text.strip()) > 5:
         heuristic = detect_user_intent(
             gathered_context=gathered_context,
@@ -410,15 +418,13 @@ async def detect_user_intent_async(
             duration=duration,
         )
         if heuristic:
+            if heuristic == "Not Connected":
+                return "Neutral"
+            if heuristic == "Did Not Speak" and has_user_speech:
+                return "Neutral"
             return heuristic
 
-    # 5. Default based on disposition and duration
-    if disposition_clean in ("busy", "no-answer", "failed", "canceled", "cancelled", "user_idle_max_duration_exceeded"):
-        return "Not Connected"
-
-    if duration < 15.0 and disposition_clean == "user_hangup":
-        return "Not Connected"
-
+    # 6. Default for connected calls where user spoke
     return "Neutral"
 
 
@@ -439,15 +445,14 @@ def detect_user_intent(
 
     disposition_clean = (disposition or "").lower().strip()
 
-    # 1. Not connected conditions
-    if (duration <= 0 or duration < 12.0) and disposition_clean in (
+    # 1. Not connected conditions: strictly duration <= 0 or unconnected statuses
+    if duration <= 0 or disposition_clean in (
         "busy",
         "no-answer",
         "failed",
         "canceled",
         "cancelled",
         "initialized",
-        "user_idle_max_duration_exceeded",
     ):
         return "Not Connected"
 
@@ -471,8 +476,8 @@ def detect_user_intent(
                 user_lines.append(l_lower)
 
         if not user_lines:
-            # Caller never spoke
-            return "Not Connected"
+            # Caller connected (>0s) but never spoke
+            return "Did Not Speak"
 
         user_content = " ".join(user_lines)
 
@@ -520,16 +525,11 @@ def detect_user_intent(
         if any(w in user_content for w in positive_words):
             return "Interested"
 
-
-        # If user spoke and engaged
+        # If user spoke and engaged neutrally / greetings
         return "Neutral"
 
-    if disposition_clean in ("busy", "no-answer", "failed", "canceled", "cancelled"):
-        return "Not Connected"
+    # If call connected but no transcript
+    return "Did Not Speak" if disposition_clean == "user_hangup" else "Neutral"
 
-    if duration < 15.0 and disposition_clean == "user_hangup":
-        return "Not Connected"
-
-    return "Neutral"
 
 

@@ -214,8 +214,9 @@ async def process_workflow_completion(
                 else []
             )
             transcript_text = generate_transcript_text(events)
+            usage = workflow_run.usage_info or {}
             cost = workflow_run.cost_info or {}
-            duration = float(cost.get("call_duration_seconds") or 0)
+            duration = float(usage.get("call_duration_seconds") or cost.get("call_duration_seconds") or 0)
             disposition = (workflow_run.gathered_context or {}).get(
                 "mapped_call_disposition", ""
             )

@@ -204,7 +204,7 @@ class OrganizationUsageClient(BaseDBClient):
             total_duration_seconds = 0
             for run in runs:
                 dograh_tokens = 0
-                call_duration = (run.usage_info or {}).get("call_duration_seconds", 0)
+                call_duration = float((run.usage_info or {}).get("call_duration_seconds") or (run.cost_info or {}).get("call_duration_seconds") or 0)
                 total_tokens += dograh_tokens
                 total_duration_seconds += int(round(call_duration))
 

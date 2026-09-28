@@ -245,6 +245,7 @@ export function WorkflowRunsTable({
                                         const gc = run.gathered_context || {};
                                         const backendIntent = (run as any).user_intent;
                                         const explicitIntent = backendIntent || (gc.user_intent || gc.intent || gc.interest_level || gc.interest) as string | undefined;
+                                        const duration = Number(run.cost_info?.call_duration_seconds ?? (run as any).usage_info?.call_duration_seconds ?? (run as any).call_duration_seconds ?? 0);
                                         let detectedIntent = explicitIntent;
                                         if (!detectedIntent) {
                                             const disposition = (gc.mapped_call_disposition as string || '').toLowerCase();
@@ -252,14 +253,13 @@ export function WorkflowRunsTable({
                                                 detectedIntent = 'Interested';
                                             } else if (gc.user_qualified === false || disposition === 'disqualified') {
                                                 detectedIntent = 'Not Interested';
-                                            } else if (['busy', 'no-answer', 'failed', 'canceled', 'cancelled', 'initialized'].includes(disposition)) {
+                                            } else if (duration <= 0 || ['busy', 'no-answer', 'failed', 'canceled', 'cancelled', 'initialized'].includes(disposition)) {
                                                 detectedIntent = 'Not Connected';
-                                            } else if (duration < 15 && disposition === 'user_hangup') {
-                                                detectedIntent = 'Not Connected';
+                                            } else if (disposition === 'user_hangup' && duration < 15) {
+                                                detectedIntent = 'Did Not Speak';
                                             } else {
                                                 detectedIntent = 'Neutral';
                                             }
-
                                         }
 
                                         return (
@@ -277,8 +277,8 @@ export function WorkflowRunsTable({
                                                 <CallTypeCell mode={run.mode} callType={run.call_type} />
                                             </TableCell>
                                             <TableCell className="text-sm">
-                                                {typeof run.cost_info?.call_duration_seconds === 'number'
-                                                    ? `${run.cost_info.call_duration_seconds.toFixed(1)}s`
+                                                {typeof (run.cost_info?.call_duration_seconds ?? (run as any).usage_info?.call_duration_seconds) === 'number'
+                                                    ? `${Number(run.cost_info?.call_duration_seconds ?? (run as any).usage_info?.call_duration_seconds).toFixed(1)}s`
                                                     : "-"}
                                             </TableCell>
                                             <TableCell>
@@ -296,6 +296,9 @@ export function WorkflowRunsTable({
                                                          const currentVal = editIntentMap[run.id] || detectedIntent || 'Not Interested';
                                                          const getIntentStyle = (val: string) => {
                                                              const s = (val || '').toLowerCase();
+                                                             if (s.includes('did not speak') || s.includes('no speech') || s.includes('silent')) {
+                                                                 return 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/40 hover:bg-zinc-500/25';
+                                                             }
                                                              if (s.includes('interested') && !s.includes('not')) {
                                                                  return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25';
                                                              }
@@ -323,6 +326,7 @@ export function WorkflowRunsTable({
                                                          const intentOptions = [
                                                              'Interested',
                                                              'Not Interested',
+                                                             'Did Not Speak',
                                                              'Positive',
                                                              'Negative',
                                                              'Neutral',
@@ -357,7 +361,7 @@ export function WorkflowRunsTable({
                                                                                  className="flex items-center gap-2 w-full px-3 py-1.5 text-xs font-medium hover:bg-muted text-left transition-colors"
                                                                              >
                                                                                  {currentVal === opt ? <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> : <span className="w-3.5" />}
-                                                                                 <span className={opt === 'Interested' || opt === 'Positive' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : opt === 'Not Interested' || opt === 'Negative' ? 'text-rose-600 dark:text-rose-400 font-semibold' : opt === 'Grievance' ? 'text-purple-600 dark:text-purple-400 font-semibold' : opt === 'Callback Requested' ? 'text-blue-600 dark:text-blue-400 font-semibold' : opt === 'Neutral' || opt === 'Inquiry' ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-slate-500'}>
+                                                                                 <span className={opt === 'Interested' || opt === 'Positive' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : opt === 'Not Interested' || opt === 'Negative' ? 'text-rose-600 dark:text-rose-400 font-semibold' : opt === 'Did Not Speak' ? 'text-zinc-600 dark:text-zinc-400 font-semibold' : opt === 'Grievance' ? 'text-purple-600 dark:text-purple-400 font-semibold' : opt === 'Callback Requested' ? 'text-blue-600 dark:text-blue-400 font-semibold' : opt === 'Neutral' || opt === 'Inquiry' ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-slate-500'}>
                                                                                      {opt}
                                                                                  </span>
                                                                              </button>

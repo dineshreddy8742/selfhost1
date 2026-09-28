@@ -516,18 +516,19 @@ export default function UsagePage() {
                                                 const rawIntent = ((run as any).user_intent || gc.user_intent || gc.intent || gc.interest_level || gc.interest) as string | undefined;
                                                 let userIntent = rawIntent;
                                                 if (!userIntent) {
-                                                    if (gc.user_qualified === true || run.disposition === 'user_qualified') {
+                                                    const duration = Number(run.call_duration_seconds ?? (run as any).cost_info?.call_duration_seconds ?? (run as any).usage_info?.call_duration_seconds ?? 0);
+                                                    const disp = (run.disposition || '').toLowerCase();
+                                                    if (gc.user_qualified === true || disp === 'user_qualified') {
                                                         userIntent = 'Interested';
-                                                    } else if (gc.user_qualified === false || run.disposition === 'disqualified') {
+                                                    } else if (gc.user_qualified === false || disp === 'disqualified') {
                                                         userIntent = 'Not Interested';
-                                                    } else if (['busy', 'no-answer', 'failed', 'canceled', 'cancelled', 'initialized'].includes((run.disposition || '').toLowerCase())) {
+                                                    } else if (duration <= 0 || ['busy', 'no-answer', 'failed', 'canceled', 'cancelled', 'initialized'].includes(disp)) {
                                                         userIntent = 'Not Connected';
-                                                    } else if ((run.call_duration_seconds || 0) < 15 && run.disposition === 'user_hangup') {
-                                                        userIntent = 'Not Connected';
+                                                    } else if (disp === 'user_hangup' && duration < 15) {
+                                                        userIntent = 'Did Not Speak';
                                                     } else {
                                                         userIntent = 'Neutral';
                                                     }
-
                                                 }
                                                 return (
                                                 <TableRow
@@ -563,6 +564,9 @@ export default function UsagePage() {
                                                                  const currentVal = editIntentMap[run.id] || userIntent || 'Not Interested';
                                                                  const getIntentStyle = (val: string) => {
                                                                      const s = (val || '').toLowerCase();
+                                                                     if (s.includes('did not speak') || s.includes('no speech') || s.includes('silent')) {
+                                                                         return 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/40 hover:bg-zinc-500/25';
+                                                                     }
                                                                      if (s.includes('interested') && !s.includes('not')) {
                                                                          return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25';
                                                                      }
@@ -590,6 +594,7 @@ export default function UsagePage() {
                                                                  const intentOptions = [
                                                                      'Interested',
                                                                      'Not Interested',
+                                                                     'Did Not Speak',
                                                                      'Positive',
                                                                      'Negative',
                                                                      'Neutral',
@@ -624,7 +629,7 @@ export default function UsagePage() {
                                                                                          className="flex items-center gap-2 w-full px-3 py-1.5 text-xs font-medium hover:bg-muted text-left transition-colors"
                                                                                      >
                                                                                          {currentVal === opt ? <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> : <span className="w-3.5" />}
-                                                                                         <span className={opt === 'Interested' || opt === 'Positive' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : opt === 'Not Interested' || opt === 'Negative' ? 'text-rose-600 dark:text-rose-400 font-semibold' : opt === 'Grievance' ? 'text-purple-600 dark:text-purple-400 font-semibold' : opt === 'Callback Requested' ? 'text-blue-600 dark:text-blue-400 font-semibold' : opt === 'Neutral' || opt === 'Inquiry' ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-slate-500'}>
+                                                                                         <span className={opt === 'Interested' || opt === 'Positive' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : opt === 'Not Interested' || opt === 'Negative' ? 'text-rose-600 dark:text-rose-400 font-semibold' : opt === 'Did Not Speak' ? 'text-zinc-600 dark:text-zinc-400 font-semibold' : opt === 'Grievance' ? 'text-purple-600 dark:text-purple-400 font-semibold' : opt === 'Callback Requested' ? 'text-blue-600 dark:text-blue-400 font-semibold' : opt === 'Neutral' || opt === 'Inquiry' ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-slate-500'}>
                                                                                              {opt}
                                                                                          </span>
                                                                                      </button>

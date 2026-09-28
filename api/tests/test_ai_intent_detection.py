@@ -5,15 +5,25 @@ import api.services.configuration.ai_model_configuration
 from api.utils.transcript import detect_user_intent, detect_user_intent_async, _analyze_intent_with_llm
 
 
-
 def test_heuristic_no_user_speech_short_call():
-    """Test that a short call where only the bot speaks and user hangs up returns Not Connected."""
+    """Test that a call where duration > 0 but only the bot speaks returns Did Not Speak."""
     transcript = "[2026-09-28T14:23:28] assistant: నమస్కారం అండి... తిరుమల తిరుపతి దేవస్థానం తరఫున మీకు కాల్ చేశాను."
     res = detect_user_intent(
         gathered_context={},
         transcript_text=transcript,
         disposition="user_hangup",
         duration=11.0,
+    )
+    assert res == "Did Not Speak"
+
+
+def test_heuristic_zero_duration_not_connected():
+    """Test that 0 seconds or unconnected disposition returns Not Connected."""
+    res = detect_user_intent(
+        gathered_context={},
+        transcript_text="",
+        disposition="busy",
+        duration=0.0,
     )
     assert res == "Not Connected"
 
@@ -92,7 +102,7 @@ async def test_detect_user_intent_async_manual_override():
 
 @pytest.mark.asyncio
 async def test_detect_user_intent_async_no_user_speech_run_126652():
-    """Test run 126652 scenario: 11 seconds, only assistant spoke, user hangup."""
+    """Test run 126652 scenario: 11 seconds, only assistant spoke, user hangup -> Did Not Speak."""
     transcript = "[2026-09-28T14:23:28] assistant: నమస్కారం అండి... తిరుమల తిరుపతి దేవస్థానం తరఫున మీ యాత్ర అనుభవం గురించి ఒక చిన్న అభిప్రాయం తెలుసుకోవడానికి మీకు కాల్ చేశాను."
     res = await detect_user_intent_async(
         gathered_context={"call_disposition": "user_hangup", "mapped_call_disposition": "user_hangup"},
@@ -101,7 +111,24 @@ async def test_detect_user_intent_async_no_user_speech_run_126652():
         duration=11.0,
         organization_id=1,
     )
-    assert res == "Not Connected"
+    assert res == "Did Not Speak"
+
+
+@pytest.mark.asyncio
+async def test_detect_user_intent_async_hello_only_run_126651():
+    """Test run 126651 scenario: 17 seconds, user said hello -> Neutral."""
+    transcript = (
+        "[2026-09-28T14:20:10] assistant: నమస్కారం అండి...\n"
+        "[2026-09-28T14:20:12] user: హలో"
+    )
+    res = await detect_user_intent_async(
+        gathered_context={"call_disposition": "user_hangup", "mapped_call_disposition": "user_hangup"},
+        transcript_text=transcript,
+        disposition="user_hangup",
+        duration=17.0,
+        organization_id=1,
+    )
+    assert res == "Neutral"
 
 
 @pytest.mark.asyncio
@@ -161,4 +188,3 @@ async def test_detect_user_intent_async_full_dialogue_with_llm():
             organization_id=1,
         )
         assert res == "Neutral"
-

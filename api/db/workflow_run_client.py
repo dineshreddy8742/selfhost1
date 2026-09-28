@@ -326,8 +326,9 @@ class WorkflowRunClient(BaseDBClient):
                 logs = run.logs or {}
                 events = logs.get("realtime_feedback_events") or [] if isinstance(logs, dict) else []
                 transcript_text = generate_transcript_text(events)
+                usage = run.usage_info or {}
                 cost = run.cost_info or {}
-                duration = float(cost.get("call_duration_seconds") or 0)
+                duration = float(usage.get("call_duration_seconds") or cost.get("call_duration_seconds") or 0)
                 disposition = (run.gathered_context or {}).get("mapped_call_disposition", "")
                 wf_def = (
                     run.definition.workflow_json
