@@ -169,6 +169,17 @@
     background: transparent;
   }
 
+  /* Utility to completely hide scrollbar while keeping full scroll functionality */
+  .no-scrollbar {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
   .dark body {
     /* Subtle orange ember glow in dark mode */
     background-image:
