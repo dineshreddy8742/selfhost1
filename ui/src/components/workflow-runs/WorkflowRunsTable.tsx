@@ -254,9 +254,12 @@ export function WorkflowRunsTable({
                                                 detectedIntent = 'Not Interested';
                                             } else if (['busy', 'no-answer', 'failed', 'canceled', 'cancelled', 'initialized'].includes(disposition)) {
                                                 detectedIntent = 'Not Connected';
+                                            } else if (duration < 15 && disposition === 'user_hangup') {
+                                                detectedIntent = 'Not Connected';
                                             } else {
-                                                detectedIntent = 'Not Interested';
+                                                detectedIntent = 'Neutral';
                                             }
+
                                         }
 
                                         return (

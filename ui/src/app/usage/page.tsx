@@ -522,9 +522,12 @@ export default function UsagePage() {
                                                         userIntent = 'Not Interested';
                                                     } else if (['busy', 'no-answer', 'failed', 'canceled', 'cancelled', 'initialized'].includes((run.disposition || '').toLowerCase())) {
                                                         userIntent = 'Not Connected';
+                                                    } else if ((run.call_duration_seconds || 0) < 15 && run.disposition === 'user_hangup') {
+                                                        userIntent = 'Not Connected';
                                                     } else {
-                                                        userIntent = 'Not Interested';
+                                                        userIntent = 'Neutral';
                                                     }
+
                                                 }
                                                 return (
                                                 <TableRow

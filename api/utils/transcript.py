@@ -104,7 +104,7 @@ async def _analyze_intent_with_llm(
     organization_id: int | None = None,
     agent_instructions: str | None = None,
 ) -> str | None:
-    """Use the exact LLM provider, model, and API key configured by the user in the Models Page to classify transcript intent."""
+    """Use the configured LLM provider, model, and API key to classify full conversation intent."""
     if not organization_id:
         return None
 
@@ -116,21 +116,22 @@ async def _analyze_intent_with_llm(
 
     prompt = (
         "You are an expert voice call evaluator and user intent classifier.\n"
-        "Analyze the user's spoken words, tone, and answers in the following call transcript across any language (Telugu, Hindi, English, etc.).\n\n"
+        "Analyze the full conversation between the AI assistant and the caller/user in the following call transcript across any language (Telugu, Hindi, English, etc.).\n\n"
         f"{instructions_block}"
         f"Call Transcript:\n{transcript_text}\n\n"
         "Instructions:\n"
-        "Evaluate the user's responses in relation to the agent's goals and guidelines above.\n"
+        "Carefully evaluate what the AI asked and what the user replied in context.\n"
         "Classify the caller's intent or outcome into the single most accurate, appropriate category:\n"
-        "- 'Interested': The caller agreed, engaged constructively, wanted details/service/quote/demo, or responded positively to the agent's offer.\n"
-        "- 'Not Interested': The caller declined, refused, said they don't need it ('vaddhu', 'voddhu', 'nakko', 'nahi chahiye', 'stop calling', 'not interested'), or hung up abruptly without interest.\n"
+        "- 'Interested': The caller agreed, engaged constructively, answered questions/survey cooperatively, wanted details/service/quote/demo, or responded positively to the agent's offer.\n"
+        "- 'Not Interested': The caller explicitly declined, refused, said they don't need it ('vaddhu', 'voddhu', 'nakko', 'nahi chahiye', 'stop calling', 'not interested'), or hung up abruptly with clear refusal.\n"
         "- 'Positive': The caller provided praise, high satisfaction, or strong approval.\n"
         "- 'Negative': The caller expressed disappointment, dissatisfaction, or negative sentiment.\n"
-        "- 'Neutral': The caller was non-committal, acknowledged information without interest or disinterest.\n"
+        "- 'Neutral': The caller was non-committal, acknowledged information without interest or disinterest, or gave routine answers.\n"
         "- 'Grievance': The caller raised a specific complaint, defect, issue, or dispute needing escalation.\n"
-        "- 'Callback Requested': The caller requested to be contacted later or was busy.\n"
-        "- 'Inquiry': The caller asked clarifying questions or sought information.\n\n"
-        "Respond ONLY with the exact single category name from above (or a concise 1-2 word intent label matching the outcome). Do not include any explanations or punctuation."
+        "- 'Callback Requested': The caller requested to be contacted later or was busy/driving.\n"
+        "- 'Inquiry': The caller asked clarifying questions or sought information.\n"
+        "- 'Not Connected': The call was dropped, silent, or no meaningful user participation occurred.\n\n"
+        "Respond ONLY with the exact single category name from above. Do not include any explanations, markdown, or punctuation."
     )
 
     api_key = None
@@ -147,16 +148,34 @@ async def _analyze_intent_with_llm(
 
         # 1. Try unmasked org config from database
         v2_config = await get_organization_ai_model_configuration_v2(organization_id)
-        if v2_config and v2_config.byok and v2_config.byok.pipeline and v2_config.byok.pipeline.llm:
-            org_llm = v2_config.byok.pipeline.llm
-            if org_llm.api_key:
-                api_key = org_llm.api_key
-                provider = org_llm.provider.value if hasattr(org_llm.provider, "value") else str(org_llm.provider)
-                model = org_llm.model
-                if getattr(org_llm, "endpoint", None):
-                    base_url = org_llm.endpoint
-                elif getattr(org_llm, "base_url", None):
-                    base_url = org_llm.base_url
+        if v2_config:
+            org_llm = None
+            if v2_config.mode == "byok" and v2_config.byok:
+                # In realtime mode, LLM configuration lives under byok.realtime.llm
+                if v2_config.byok.mode == "realtime" and v2_config.byok.realtime and v2_config.byok.realtime.llm:
+                    org_llm = v2_config.byok.realtime.llm
+                elif v2_config.byok.mode == "pipeline" and v2_config.byok.pipeline and v2_config.byok.pipeline.llm:
+                    org_llm = v2_config.byok.pipeline.llm
+                elif v2_config.byok.realtime and v2_config.byok.realtime.llm:
+                    org_llm = v2_config.byok.realtime.llm
+                elif v2_config.byok.pipeline and v2_config.byok.pipeline.llm:
+                    org_llm = v2_config.byok.pipeline.llm
+            elif v2_config.mode == "dograh" and v2_config.dograh:
+                api_key = v2_config.dograh.api_key
+                provider = "dograh"
+                model = "default"
+
+            if org_llm and org_llm.api_key:
+                raw_key = org_llm.api_key
+                k = raw_key[0] if isinstance(raw_key, list) and raw_key else (raw_key if isinstance(raw_key, str) else "")
+                if k and not k.startswith("***"):
+                    api_key = k
+                    provider = org_llm.provider.value if hasattr(org_llm.provider, "value") else str(org_llm.provider)
+                    model = org_llm.model
+                    if getattr(org_llm, "endpoint", None):
+                        base_url = org_llm.endpoint
+                    elif getattr(org_llm, "base_url", None):
+                        base_url = org_llm.base_url
 
         # 2. Fall back to resolved effective configuration
         if not api_key:
@@ -166,54 +185,78 @@ async def _analyze_intent_with_llm(
             )
             effective = resolved.effective if resolved else None
             if effective and effective.llm and effective.llm.api_key:
-                if not effective.llm.api_key.startswith("***"):
-                    api_key = effective.llm.api_key
+                raw_key = effective.llm.api_key
+                k = raw_key[0] if isinstance(raw_key, list) and raw_key else (raw_key if isinstance(raw_key, str) else "")
+                if k and not k.startswith("***"):
+                    api_key = k
                     provider = effective.llm.provider.value if hasattr(effective.llm.provider, "value") else str(effective.llm.provider)
                     model = effective.llm.model
                     if getattr(effective.llm, "endpoint", None):
                         base_url = effective.llm.endpoint
                     elif getattr(effective.llm, "base_url", None):
                         base_url = effective.llm.base_url
-    except Exception as e:
-        logger.debug(f"Failed to fetch Models Page LLM config for intent detection: {e}")
 
-    # If user has not selected an API key, provider, or model in the Models Page: do NOT use any hardcoded default model!
+            # Secondary fallback: if LLM not found, check OpenRouter in embeddings config
+            if not api_key and effective and effective.embeddings and effective.embeddings.api_key:
+                raw_key = effective.embeddings.api_key
+                k = raw_key[0] if isinstance(raw_key, list) and raw_key else (raw_key if isinstance(raw_key, str) else "")
+                if k and not k.startswith("***"):
+                    emb_prov = effective.embeddings.provider.value if hasattr(effective.embeddings.provider, "value") else str(effective.embeddings.provider)
+                    if "openrouter" in emb_prov.lower():
+                        api_key = k
+                        provider = "openrouter"
+                        model = "openai/gpt-4o-mini"
+                        base_url = getattr(effective.embeddings, "base_url", "https://openrouter.ai/api/v1")
+    except Exception as e:
+        logger.warning(f"Failed to fetch Models Page LLM config for intent detection: {e}")
+
+    # If user has not selected an API key, provider, or model: do NOT make random external calls
     if not api_key or not provider or not model:
+        logger.info(f"Skipping LLM intent analysis: api_key={bool(api_key)}, provider={provider}, model={model}")
         return None
 
+    # Handle string extraction if api_key was somehow still a list
+    if isinstance(api_key, list):
+        api_key = api_key[0] if api_key else ""
+
+    prov_lower = provider.lower()
+
+    # Sarvam AI model alias: sarvam-30b and sarvam-2b were deprecated; map to conversational model
+    if "sarvam" in prov_lower:
+        if not model or model in ("sarvam-30b", "sarvam-2b", "default"):
+            model = "sarvam-105b-conversations"
+
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            prov_lower = provider.lower()
+        async with httpx.AsyncClient(timeout=15.0) as client:
             content = ""
 
-            if "gemini" in prov_lower or "google" in prov_lower and "vertex" not in prov_lower and "openrouter" not in prov_lower:
+            if "gemini" in prov_lower or ("google" in prov_lower and "vertex" not in prov_lower and "openrouter" not in prov_lower):
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
                 payload = {
                     "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.0, "maxOutputTokens": 20},
+                    "generationConfig": {"temperature": 0.0, "maxOutputTokens": 30},
                 }
                 resp = await client.post(url, json=payload)
                 if resp.status_code == 200:
                     result_data = resp.json()
-                    content = (
-                        result_data.get("candidates", [{}])[0]
-                        .get("content", {})
-                        .get("parts", [{}])[0]
-                        .get("text", "")
-                        .strip()
-                    )
+                    candidates = result_data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            content = parts[0].get("text", "").strip()
+                else:
+                    logger.warning(f"Gemini intent classification returned status {resp.status_code}: {resp.text[:200]}")
             elif "sarvam" in prov_lower:
-                # Sarvam AI chat completion
                 headers = {
                     "Authorization": f"Bearer {api_key}",
                     "api-subscription-key": api_key,
                     "Content-Type": "application/json",
                 }
                 payload = {
-                    "model": model or "sarvam-30b",
+                    "model": model,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.0,
-                    "max_tokens": 20,
+                    "max_tokens": 50,
                 }
                 url = base_url or "https://api.sarvam.ai/v1/chat/completions"
                 if not url.endswith("/chat/completions"):
@@ -221,14 +264,14 @@ async def _analyze_intent_with_llm(
                 resp = await client.post(url, json=payload, headers=headers)
                 if resp.status_code == 200:
                     result_data = resp.json()
-                    content = (
-                        result_data.get("choices", [{}])[0]
-                        .get("message", {})
-                        .get("content", "")
-                        .strip()
-                    )
+                    choices = result_data.get("choices", [])
+                    if choices:
+                        msg = choices[0].get("message", {})
+                        content = (msg.get("content") or msg.get("reasoning_content") or "").strip()
+                else:
+                    logger.warning(f"Sarvam intent classification returned status {resp.status_code}: {resp.text[:200]}")
             else:
-                # OpenRouter, OpenAI, Groq, Azure, or any OpenAI-compatible provider selected by user
+                # OpenRouter, OpenAI, Groq, Azure, or any OpenAI-compatible provider
                 headers = {
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
@@ -237,7 +280,7 @@ async def _analyze_intent_with_llm(
                     "model": model,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.0,
-                    "max_tokens": 20,
+                    "max_tokens": 50,
                 }
                 url = base_url or (
                     "https://openrouter.ai/api/v1/chat/completions"
@@ -252,15 +295,18 @@ async def _analyze_intent_with_llm(
                 resp = await client.post(url, json=payload, headers=headers)
                 if resp.status_code == 200:
                     result_data = resp.json()
-                    content = (
-                        result_data.get("choices", [{}])[0]
-                        .get("message", {})
-                        .get("content", "")
-                        .strip()
-                    )
+                    choices = result_data.get("choices", [])
+                    if choices:
+                        msg = choices[0].get("message", {})
+                        content = (msg.get("content") or msg.get("reasoning") or "").strip()
+                else:
+                    logger.warning(f"LLM intent classification returned status {resp.status_code}: {resp.text[:200]}")
 
             if content:
                 clean_content = content.replace("*", "").replace('"', '').replace("'", "").strip()
+                lines = [l.strip() for l in clean_content.splitlines() if l.strip()]
+                target_text = lines[-1] if lines else clean_content
+
                 # Check standard categories
                 for cat in [
                     "Not Interested",
@@ -271,15 +317,15 @@ async def _analyze_intent_with_llm(
                     "Neutral",
                     "Grievance",
                     "Inquiry",
-                    "Confirmed",
+                    "Not Connected",
                 ]:
                     if cat.lower() in clean_content.lower():
                         return cat
 
                 # Clean short 1-3 word classification
-                words = clean_content.split()
-                if 0 < len(words) <= 3 and len(clean_content) <= 30:
-                    return clean_content.title()
+                words = target_text.split()
+                if 0 < len(words) <= 3 and len(target_text) <= 30:
+                    return target_text.title()
     except Exception as err:
         logger.warning(f"LLM intent classification failed with model '{model}': {err}")
 
@@ -295,64 +341,58 @@ async def detect_user_intent_async(
     agent_instructions: str | None = None,
     workflow_definition: dict | None = None,
 ) -> str:
-    """Async intent detection utilizing LLM transcript analysis with multi-lingual awareness."""
+    """Async intent detection reading full conversation context with AI LLM and multilingual understanding."""
     gathered = gathered_context or {}
 
-    # 0. Check manual user override or previously stored intent - HIGHEST PRECEDENCE
-    explicit_intent = (
-        gathered.get("user_intent")
-        or gathered.get("intent")
-        or gathered.get("interest_level")
-        or gathered.get("interest")
-    )
-    if isinstance(explicit_intent, str) and explicit_intent.strip():
-        val = explicit_intent.strip()
-        val_lower = val.lower()
-        if val_lower in ("not connected", "not_connected"):
-            return "Not Connected"
-        return val
+    # 0. Check manual user override - HIGHEST PRECEDENCE
+    if gathered.get("user_intent_manual") is True:
+        val = str(gathered.get("user_intent") or "").strip()
+        if val:
+            return val
+
+    # Explicit qualification flags
+    if (
+        gathered.get("user_qualified") is True
+        or (disposition or "").lower() in ("user_qualified", "qualified", "transfer_call", "xfer")
+    ):
+        return "Interested"
+    if (
+        gathered.get("user_qualified") is False
+        or (disposition or "").lower() in ("disqualified", "not_qualified", "dnc")
+    ):
+        return "Not Interested"
 
     disposition_clean = (disposition or "").lower().strip()
 
-    # 1. Check if call was disconnected / not answered
-    if duration <= 0 and disposition_clean in (
+    # 1. Check if call was disconnected / not answered / short abort
+    if (duration <= 0 or duration < 12.0) and disposition_clean in (
         "busy",
         "no-answer",
         "failed",
         "canceled",
         "cancelled",
         "initialized",
+        "user_idle_max_duration_exceeded",
     ):
         return "Not Connected"
-
-    if (
-        gathered.get("user_qualified") is True
-        or disposition_clean in ("user_qualified", "qualified", "transfer_call", "xfer")
-    ):
-        return "Interested"
-    if (
-        gathered.get("user_qualified") is False
-        or disposition_clean in ("disqualified", "not_qualified", "dnc")
-    ):
-        return "Not Interested"
 
     # 2. Extract agent instructions from workflow definition if not explicitly passed
     if not agent_instructions and workflow_definition:
         agent_instructions = extract_workflow_instructions(workflow_definition)
 
-    # 3. Try LLM Intent Analysis on Transcript
+    # 3. Analyze Transcript with AI
     if transcript_text and len(transcript_text.strip()) > 5:
         text_lower = transcript_text.lower()
-        # Check if the user/caller actually spoke any words in the conversation
         has_user_speech = any(
             marker in text_lower
             for marker in ["user:", "caller:", "human:", "speaker 1:", "[user]", "speaker 0:"]
         )
         if not has_user_speech:
-            # If the user NEVER spoke a single word (e.g. only assistant spoke before hangup):
-            return "Not Interested"
+            # If the user NEVER spoke a single word (e.g. only assistant spoke before hangup or test drop):
+            # Never label an unanswered / dropped call as "Not Interested"!
+            return "Not Connected"
 
-        # Pass full transcript context so the LLM knows what questions the user answered
+        # Pass full conversation context to LLM
         llm_intent = await _analyze_intent_with_llm(
             transcript_text=transcript_text,
             organization_id=organization_id,
@@ -361,11 +401,25 @@ async def detect_user_intent_async(
         if llm_intent:
             return llm_intent
 
-    # 4. Fallback if no LLM or un-answered
-    if disposition_clean in ("busy", "no-answer", "failed", "canceled", "cancelled"):
+    # 4. Fallback heuristic
+    if transcript_text and len(transcript_text.strip()) > 5:
+        heuristic = detect_user_intent(
+            gathered_context=gathered_context,
+            transcript_text=transcript_text,
+            disposition=disposition,
+            duration=duration,
+        )
+        if heuristic:
+            return heuristic
+
+    # 5. Default based on disposition and duration
+    if disposition_clean in ("busy", "no-answer", "failed", "canceled", "cancelled", "user_idle_max_duration_exceeded"):
         return "Not Connected"
 
-    return "Not Interested"
+    if duration < 15.0 and disposition_clean == "user_hangup":
+        return "Not Connected"
+
+    return "Neutral"
 
 
 def detect_user_intent(
@@ -374,47 +428,26 @@ def detect_user_intent(
     disposition: str | None = None,
     duration: float = 0.0,
 ) -> str:
-    """Detect user intent strictly based on user's spoken sentences in transcript.
-
-    - Returns 'Not Connected' if call was never connected (busy, no-answer, failed, canceled, initialized with 0s).
-    - Checks explicit gathered_context (e.g. manual edit override or live agent setting).
-    - Inspects ONLY user's spoken lines in transcript (ignoring assistant words):
-      - Positive user words (interested, avunu, haan, send details, yes, ok, etc.) -> 'Interested'
-      - Negative user words (not interested, vaddhu, voddhu, nakko, nahi, don't call, etc.) -> 'Not Interested'
-      - No user words or undecoded speech -> 'Not Interested'
-    - No duration-based defaulting to Interested.
-    """
+    """Detect user intent based on user's spoken words in transcript across English, Telugu, Hindi."""
     gathered = gathered_context or {}
 
-    # 0. Check manual user override (stored in gathered_context) - HIGHEST PRECEDENCE
-    explicit_intent = (
-        gathered.get("user_intent")
-        or gathered.get("intent")
-        or gathered.get("interest_level")
-        or gathered.get("interest")
-    )
-    if isinstance(explicit_intent, str) and explicit_intent.strip():
-        val = explicit_intent.strip()
-        if val in ("Interested", "Not Interested", "Not Connected"):
+    # 0. Check manual user override
+    if gathered.get("user_intent_manual") is True:
+        val = str(gathered.get("user_intent") or "").strip()
+        if val:
             return val
-        val_lower = val.lower()
-        if val_lower in ("not connected", "not_connected"):
-            return "Not Connected"
-        if any(k in val_lower for k in ["not interested", "uninterested", "disqualified", "no_interest", "rejected", "not_interested"]):
-            return "Not Interested"
-        if any(k in val_lower for k in ["interested", "qualified", "high", "positive", "hot", "warm"]):
-            return "Interested"
 
     disposition_clean = (disposition or "").lower().strip()
 
-    # 1. Check if call was disconnected / not answered
-    if duration <= 0 and disposition_clean in (
+    # 1. Not connected conditions
+    if (duration <= 0 or duration < 12.0) and disposition_clean in (
         "busy",
         "no-answer",
         "failed",
         "canceled",
         "cancelled",
         "initialized",
+        "user_idle_max_duration_exceeded",
     ):
         return "Not Connected"
 
@@ -429,9 +462,74 @@ def detect_user_intent(
     ):
         return "Not Interested"
 
-    # Default for un-answered/busy calls is Not Connected, otherwise Not Interested
+    # 2. Inspect spoken user turns in transcript
+    if transcript_text and len(transcript_text.strip()) > 5:
+        user_lines = []
+        for line in transcript_text.splitlines():
+            l_lower = line.lower()
+            if any(l_lower.startswith(p) or f" {p}" in l_lower for p in ["user:", "caller:", "human:"]):
+                user_lines.append(l_lower)
+
+        if not user_lines:
+            # Caller never spoke
+            return "Not Connected"
+
+        user_content = " ".join(user_lines)
+
+        # Negative keywords (Telugu script, Hindi script, phonetic Telugu/Hindi, English)
+        negative_words = [
+            "not interested", "no interest", "don't call", "dont call", "stop calling",
+            "vaddhu", "voddhu", "voddu", "vadhu", "nakko", "nahi chahiye", "nahi",
+            "interest ledu", "avsaram ledu", "avasaram ledu", "waste", "call cheyodu",
+            "వద్దు", "వద్దండి", "వద్దులెండి", "అవసరం లేదు", "చేయకండి", "చేయవద్దు", "ఇంట్రెస్ట్ లేదు",
+            "లేదు", "రాంగ్ నెంబర్", "కాల్ చేయొద్దు", "నహీ", "నహీ చాహియే", "రోకో",
+            "नहीं", "नहीं चाहिए", "मत करो", "बंद करो", "गलत नंबर",
+        ]
+        if any(w in user_content for w in negative_words):
+            return "Not Interested"
+
+        # Callback keywords
+        callback_words = [
+            "callback", "call back", "later", "driving", "meeting", "busy",
+            "tarvata", "taruvatha", "malli cheyandi", "malli call", "repu cheyandi",
+            "తర్వాత", "తరువాత", "రేపు", "మళ్ళీ", "మళ్లీ", "డ్రైవింగ్", "బిజీ", "తర్వాత చేయండి",
+            "बाद में", "ड्राइविंग", "बिजी", "कल करो",
+        ]
+        if any(w in user_content for w in callback_words):
+            return "Callback Requested"
+
+        # Grievance keywords
+        grievance_words = [
+            "complaint", "grievance", "problem", "issue", "samasyalu", "samasya",
+            "raledu", "bad", "daridram", "damage", "defect",
+            "సమస్య", "కంప్లైంట్", "రాలేదు", "సరిగా లేదు", "గోల", "ఖరాబ్", "ఇబ్బంది",
+            "शिकायत", "समस्या", "दिक्कत", "खराब",
+        ]
+        if any(w in user_content for w in grievance_words):
+            return "Grievance"
+
+        # Positive keywords (Telugu script, Hindi script, phonetic, English)
+        positive_words = [
+            "interested", "yes", "sure", "avunu", "ha", "haan", "cheppandi",
+            "matladandi", "bagundi", "satisfactory", "santhuptikaram", "correct",
+            "send details", "ok", "okay", "sare", "manchidi", "super",
+            "బాగుంది", "బాగున్నాయి", "సరే", "చెప్పండి", "మాట్లాడండి", "అవును", "హా",
+            "సంతోషం", "సంతృప్తికరంగా", "మంచిది", "పర్లేదు", "పర్లేదండి", "వివరాలు పంపండి",
+            "हाँ", "अच्छा", "ठीक है", "बात करो", "बताओ", "चाहिए", "संतुष्ट",
+        ]
+        if any(w in user_content for w in positive_words):
+            return "Interested"
+
+
+        # If user spoke and engaged
+        return "Neutral"
+
     if disposition_clean in ("busy", "no-answer", "failed", "canceled", "cancelled"):
         return "Not Connected"
 
-    return "Not Interested"
+    if duration < 15.0 and disposition_clean == "user_hangup":
+        return "Not Connected"
+
+    return "Neutral"
+
 

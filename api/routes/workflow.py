@@ -1373,7 +1373,7 @@ async def get_workflow_run(
 
 
 class UpdateRunIntentRequest(BaseModel):
-    intent: Literal["Interested", "Not Interested", "Not Connected"]
+    intent: str
 
 
 @router.patch("/{workflow_id}/runs/{run_id}/intent")
@@ -1393,9 +1393,13 @@ async def update_run_intent(
 
     await db_client.update_workflow_run(
         run_id,
-        gathered_context={"user_intent": request.intent},
+        gathered_context={
+            "user_intent": request.intent,
+            "user_intent_manual": True,
+        },
     )
     return {"id": run_id, "intent": request.intent}
+
 
 
 @router.post("/runs/purge-expired")
