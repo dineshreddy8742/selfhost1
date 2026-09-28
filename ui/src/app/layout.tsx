@@ -31,6 +31,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Dailsmart AI",
   description: "Voice Assistant Workflow Builder",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/favicon.png",
+  },
 };
 
 export default function RootLayout({
