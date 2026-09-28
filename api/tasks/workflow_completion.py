@@ -54,36 +54,23 @@ async def _upload_temp_file(
                 logger.warning(f"Failed to clean up temp {label} file: {e}")
 
 
-async def process_workflow_completion(
-    _ctx,
+async def upload_workflow_artifacts(
     workflow_run_id: int,
     audio_temp_path: Optional[str] = None,
     transcript_temp_path: Optional[str] = None,
     user_audio_temp_path: Optional[str] = None,
     bot_audio_temp_path: Optional[str] = None,
-):
-    """Process workflow completion: upload artifacts and run integrations.
+) -> bool:
+    """Upload call audio and transcript artifacts to storage backend and update workflow run.
 
-    This task combines audio upload, transcript upload, and webhook integrations
-    into a single sequential task to ensure integrations run after uploads complete.
-
-    Args:
-        _ctx: ARQ context (unused)
-        workflow_run_id: The workflow run ID
-        audio_temp_path: Optional path to temp audio file
-        transcript_temp_path: Optional path to temp transcript file
-        user_audio_temp_path: Optional path to temp user-track audio file
-        bot_audio_temp_path: Optional path to temp bot-track audio file
+    This function should be called directly by the process that created the temp files
+    (e.g. the API / pipeline handler) so that uploads succeed in distributed environments
+    (such as Google Cloud Run or Kubernetes) where temp files are local to the container
+    instance and not shared across machines/workers.
     """
-    run_id = str(workflow_run_id)
-    set_current_run_id(run_id)
-
-    logger.info(f"Processing workflow completion for run {workflow_run_id}")
-
     storage_backend = get_current_storage_backend()
     storage = get_storage_for_backend(storage_backend.value)
 
-    # Step 1: Upload audio if provided
     recordings_metadata: dict[str, dict] = {}
 
     if audio_temp_path:
@@ -134,7 +121,6 @@ async def process_workflow_completion(
             extra={"recordings": recordings_metadata},
         )
 
-    # Step 2: Upload transcript if provided
     if transcript_temp_path:
         try:
             if os.path.exists(transcript_temp_path):
@@ -170,6 +156,45 @@ async def process_workflow_completion(
                     )
                 except Exception as e:
                     logger.warning(f"Failed to clean up temp transcript file: {e}")
+
+    return bool(recordings_metadata or transcript_temp_path)
+
+
+async def process_workflow_completion(
+    _ctx,
+    workflow_run_id: int,
+    audio_temp_path: Optional[str] = None,
+    transcript_temp_path: Optional[str] = None,
+    user_audio_temp_path: Optional[str] = None,
+    bot_audio_temp_path: Optional[str] = None,
+):
+    """Process workflow completion: upload artifacts and run integrations.
+
+    This task combines audio upload, transcript upload, and webhook integrations
+    into a single sequential task to ensure integrations run after uploads complete.
+
+    Args:
+        _ctx: ARQ context (unused)
+        workflow_run_id: The workflow run ID
+        audio_temp_path: Optional path to temp audio file
+        transcript_temp_path: Optional path to temp transcript file
+        user_audio_temp_path: Optional path to temp user-track audio file
+        bot_audio_temp_path: Optional path to temp bot-track audio file
+    """
+    run_id = str(workflow_run_id)
+    set_current_run_id(run_id)
+
+    logger.info(f"Processing workflow completion for run {workflow_run_id}")
+
+    # Step 1: Upload audio/transcript if provided (fallback for direct/legacy callers)
+    if any([audio_temp_path, transcript_temp_path, user_audio_temp_path, bot_audio_temp_path]):
+        await upload_workflow_artifacts(
+            workflow_run_id=workflow_run_id,
+            audio_temp_path=audio_temp_path,
+            transcript_temp_path=transcript_temp_path,
+            user_audio_temp_path=user_audio_temp_path,
+            bot_audio_temp_path=bot_audio_temp_path,
+        )
 
     # Step 3: Automatically classify intent using user's configured model + agent instructions
     try:

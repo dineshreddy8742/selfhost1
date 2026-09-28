@@ -396,15 +396,28 @@ def register_event_handlers(
         except Exception as e:
             logger.error(f"Error preparing buffers for S3 upload: {e}", exc_info=True)
 
-        # Combined task: uploads artifacts, runs integrations (including QA),
-        # then calculates cost (so QA token usage is captured in usage_info)
+        # Upload artifacts immediately within this process so that uploads do not rely
+        # on a shared filesystem between API containers and distributed background workers (e.g. on Cloud Run).
+        try:
+            from api.tasks.workflow_completion import upload_workflow_artifacts
+
+            await upload_workflow_artifacts(
+                workflow_run_id=workflow_run_id,
+                audio_temp_path=audio_temp_path,
+                transcript_temp_path=transcript_temp_path,
+                user_audio_temp_path=user_audio_temp_path,
+                bot_audio_temp_path=bot_audio_temp_path,
+            )
+        except Exception as e:
+            logger.error(
+                f"Error uploading artifacts directly for run {workflow_run_id}: {e}",
+                exc_info=True,
+            )
+
+        # Combined task: runs intent detection, integrations (including QA), and billing
         await enqueue_job(
             FunctionNames.PROCESS_WORKFLOW_COMPLETION,
             workflow_run_id,
-            audio_temp_path,
-            transcript_temp_path,
-            user_audio_temp_path,
-            bot_audio_temp_path,
         )
 
     # Return the buffer so it can be passed to other handlers
