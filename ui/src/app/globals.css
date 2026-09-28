@@ -86,40 +86,45 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  /* Deep charcoal base with warm undertone */
+  --background: oklch(0.13 0.008 42);
+  --foreground: oklch(0.95 0.01 55);
+  --card: oklch(0.185 0.010 42);
+  --card-foreground: oklch(0.95 0.01 55);
+  --popover: oklch(0.185 0.010 42);
+  --popover-foreground: oklch(0.95 0.01 55);
+  /* DailSmart saffron-orange primary in dark mode */
+  --primary: oklch(0.68 0.22 42);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.24 0.018 42);
+  --secondary-foreground: oklch(0.90 0.01 55);
+  --muted: oklch(0.22 0.012 42);
+  --muted-foreground: oklch(0.62 0.02 50);
+  --accent: oklch(0.26 0.025 42);
+  --accent-foreground: oklch(0.72 0.18 50);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-  /* Warm accent, slightly brighter against the near-black surfaces. */
-  --cta: oklch(0.78 0.16 67);
-  --cta-foreground: oklch(0.16 0.02 60);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 12%);
+  /* Orange ring for focus states */
+  --ring: oklch(0.68 0.22 42);
+  /* Charts aligned to DailSmart brand palette */
+  --chart-1: oklch(0.68 0.22 42);
+  --chart-2: oklch(0.72 0.17 65);
+  --chart-3: oklch(0.60 0.18 30);
+  --chart-4: oklch(0.80 0.14 75);
+  --chart-5: oklch(0.52 0.16 240);
+  /* Sidebar: slightly lighter warm charcoal */
+  --sidebar: oklch(0.185 0.010 42);
+  --sidebar-foreground: oklch(0.92 0.01 55);
+  --sidebar-primary: oklch(0.68 0.22 42);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.26 0.025 42);
+  --sidebar-accent-foreground: oklch(0.72 0.18 50);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.68 0.22 42);
+  /* Bright saffron CTA against dark surfaces */
+  --cta: oklch(0.70 0.22 42);
+  --cta-foreground: oklch(1 0 0);
   --brand-imprint: none;
 }
 
@@ -138,7 +143,12 @@
   }
 
   .dark body {
-    background-image: none;
+    /* Subtle orange ember glow in dark mode */
+    background-image:
+      radial-gradient(ellipse 55% 40% at 92% 8%, rgba(234, 88, 12, 0.14), transparent 65%),
+      radial-gradient(ellipse 45% 35% at 6% 92%, rgba(249, 115, 22, 0.08), transparent 60%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
   }
 }
 
