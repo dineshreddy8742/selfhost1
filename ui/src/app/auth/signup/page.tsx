@@ -74,7 +74,7 @@ export default function SignupPage() {
   };
 
   return (
-    <AuthShell enterpriseSlot={<AuthEnterpriseCTA />}>
+    <AuthShell mode="signup" enterpriseSlot={<AuthEnterpriseCTA />}>
       <div className="space-y-1.5 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
         <p className="text-sm text-muted-foreground">Enter your details to get started</p>

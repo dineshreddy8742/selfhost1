@@ -60,7 +60,7 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthShell enterpriseSlot={<AuthEnterpriseCTA />}>
+    <AuthShell mode="login" enterpriseSlot={<AuthEnterpriseCTA />}>
       <div className="space-y-1.5 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
         <p className="text-sm text-muted-foreground">

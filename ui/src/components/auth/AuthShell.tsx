@@ -1,44 +1,76 @@
+"use client";
+
 // Shared dark two-column auth shell, used by BOTH the Stack Auth handler
 // (/handler/[...stack], cloud) and the local/OSS auth pages (/auth/login,
 // /auth/signup). LEFT: a centered card that wraps the auth form (`children`).
 // RIGHT (lg+ only): a brand/value panel with the DailSmart logo and feature highlights.
 // Mobile collapses to the single card column.
 
-import { Bot, PhoneCall, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { Activity, Bot, KeyRound, PhoneCall, Sparkles, TrendingUp } from "lucide-react";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { BrandLogo } from "@/components/BrandLogo";
 
-const VALUE_PROPS = [
-  {
-    icon: PhoneCall,
-    title: "24/7 Automated Calling",
-    desc: "Handle customer support & outbound campaigns without waiting queues or human fatigue.",
-  },
-  {
-    icon: Bot,
-    title: "Human-Like Voice Conversations",
-    desc: "Natural speech and active listening that understands context, tone, and customer intent.",
-  },
-  {
-    icon: Zap,
-    title: "Smart Lead Qualification & Booking",
-    desc: "Instantly capture caller details, qualify leads, and schedule appointments on autopilot.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Live Recordings & Smart Analytics",
-    desc: "Access full call audio playback, precise transcripts, and instant AI summaries for every call.",
-  },
-];
+const SIGNUP_CONTENT = {
+  badge: "Automate Today, Lead Tomorrow",
+  title: "Launch your Voice AI agents in minutes.",
+  subtitle: "Smarter calling and 24/7 lead automation tailored for your business.",
+  items: [
+    {
+      icon: PhoneCall,
+      title: "Human-Like Voice Calling",
+      desc: "Natural conversations with zero delay that answer questions and engage callers.",
+    },
+    {
+      icon: TrendingUp,
+      title: "Auto-Qualify & Capture Leads",
+      desc: "Automatically gather customer requirements and book meetings on autopilot.",
+    },
+    {
+      icon: KeyRound,
+      title: "BYOK (Bring Your Own Key)",
+      desc: "Connect your own AI model keys directly for full control and zero markup.",
+    },
+  ],
+};
+
+const LOGIN_CONTENT = {
+  badge: "Automate Today, Lead Tomorrow",
+  title: "Welcome back to your Voice AI hub.",
+  subtitle: "Your intelligent voice agents are running and handling calls 24/7.",
+  items: [
+    {
+      icon: Activity,
+      title: "Live Call Operations",
+      desc: "Monitor active inbound and outbound customer calls with instant transcripts.",
+    },
+    {
+      icon: Bot,
+      title: "Actionable Call Intelligence",
+      desc: "Access audio recordings, caller intent detection, and smart summaries.",
+    },
+    {
+      icon: KeyRound,
+      title: "BYOK Flexibility",
+      desc: "Manage and switch your AI model keys anytime with complete independence.",
+    },
+  ],
+};
 
 export function AuthShell({
   children,
   enterpriseSlot: _enterpriseSlot,
+  mode,
 }: {
   children: ReactNode;
   enterpriseSlot?: ReactNode;
+  mode?: "login" | "signup";
 }) {
+  const pathname = usePathname();
+  const isSignup = mode === "signup" || (mode ? false : pathname?.includes("signup"));
+  const content = isSignup ? SIGNUP_CONTENT : LOGIN_CONTENT;
+
   return (
     <div className="grid min-h-screen w-full bg-background lg:grid-cols-[52%_48%] xl:grid-cols-[50%_50%]">
       {/* Form column (LEFT) — scrolls and stays centered so tall forms never clip. */}
@@ -67,29 +99,29 @@ export function AuthShell({
           <BrandLogo inverse className="h-8" />
         </div>
 
-        <div className="relative max-w-lg space-y-7 my-auto py-6">
-          <div className="space-y-3">
+        <div className="relative max-w-md space-y-6 my-auto py-4">
+          <div className="space-y-2.5">
             <div className="inline-flex items-center gap-2 rounded-full border border-orange-500/25 bg-orange-500/10 px-3 py-1 text-xs font-medium text-orange-400">
               <Sparkles className="size-3.5" />
-              <span>Next-Gen Voice AI Automation</span>
+              <span>{content.badge}</span>
             </div>
-            <h1 className="text-3xl font-bold leading-tight tracking-tight text-zinc-50 xl:text-4xl">
-              Supercharge your business with smart Voice AI.
+            <h1 className="text-2xl font-bold leading-snug tracking-tight text-zinc-50 xl:text-3xl">
+              {content.title}
             </h1>
             <p className="text-sm leading-relaxed text-zinc-400">
-              Deploy intelligent voice agents that answer inbound calls, run outbound campaigns, qualify leads, and delight customers 24/7.
+              {content.subtitle}
             </p>
           </div>
 
-          <div className="grid gap-3">
-            {VALUE_PROPS.map((prop) => {
+          <div className="grid gap-2.5">
+            {content.items.map((prop) => {
               const Icon = prop.icon;
               return (
                 <div
                   key={prop.title}
-                  className="flex items-start gap-3.5 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3.5 transition-colors hover:border-orange-500/30 hover:bg-white/[0.05]"
+                  className="flex items-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 transition-colors hover:border-orange-500/30 hover:bg-white/[0.05]"
                 >
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20">
                     <Icon className="size-4" />
                   </div>
                   <div className="space-y-0.5">
@@ -102,8 +134,8 @@ export function AuthShell({
           </div>
         </div>
 
-        <div className="relative flex items-center justify-between text-xs text-zinc-500 border-t border-white/[0.06] pt-5">
-          <span>Powered by DailSmart AI</span>
+        <div className="relative flex items-center justify-between text-xs text-zinc-500 border-t border-white/[0.06] pt-4">
+          <span>DailSmart AI</span>
           <span>Enterprise-Grade Voice Platform</span>
         </div>
       </aside>
