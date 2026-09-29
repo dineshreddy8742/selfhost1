@@ -72,6 +72,8 @@ async def upload_workflow_artifacts(
     storage = get_storage_for_backend(storage_backend.value)
 
     recordings_metadata: dict[str, dict] = {}
+    uploaded_recording_url: Optional[str] = None
+    uploaded_transcript_url: Optional[str] = None
 
     if audio_temp_path:
         recording_url = f"recordings/{workflow_run_id}.wav"
@@ -84,11 +86,7 @@ async def upload_workflow_artifacts(
             recordings_metadata["mixed"] = _recording_metadata(
                 recording_url, storage_backend.value, "mixed"
             )
-            await db_client.update_workflow_run(
-                run_id=workflow_run_id,
-                recording_url=recording_url,
-                storage_backend=storage_backend.value,
-            )
+            uploaded_recording_url = recording_url
 
     if user_audio_temp_path:
         user_recording_url = f"recordings/{workflow_run_id}/user.wav"
@@ -114,13 +112,6 @@ async def upload_workflow_artifacts(
                 bot_recording_url, storage_backend.value, "bot"
             )
 
-    if recordings_metadata:
-        await db_client.update_workflow_run(
-            run_id=workflow_run_id,
-            storage_backend=storage_backend.value,
-            extra={"recordings": recordings_metadata},
-        )
-
     if transcript_temp_path:
         try:
             if os.path.exists(transcript_temp_path):
@@ -133,11 +124,7 @@ async def upload_workflow_artifacts(
                 )
 
                 await storage.aupload_file(transcript_temp_path, transcript_url)
-                await db_client.update_workflow_run(
-                    run_id=workflow_run_id,
-                    transcript_url=transcript_url,
-                    storage_backend=storage_backend.value,
-                )
+                uploaded_transcript_url = transcript_url
                 logger.info(f"Successfully uploaded transcript: {transcript_url}")
             else:
                 logger.warning(
@@ -157,7 +144,23 @@ async def upload_workflow_artifacts(
                 except Exception as e:
                     logger.warning(f"Failed to clean up temp transcript file: {e}")
 
-    return bool(recordings_metadata or transcript_temp_path)
+    # Single atomic database update for all artifacts together
+    db_updates: dict[str, Any] = {}
+    if uploaded_recording_url:
+        db_updates["recording_url"] = uploaded_recording_url
+    if uploaded_transcript_url:
+        db_updates["transcript_url"] = uploaded_transcript_url
+    if recordings_metadata:
+        db_updates["extra"] = {"recordings": recordings_metadata}
+
+    if db_updates:
+        await db_client.update_workflow_run(
+            run_id=workflow_run_id,
+            storage_backend=storage_backend.value,
+            **db_updates,
+        )
+
+    return bool(recordings_metadata or uploaded_transcript_url)
 
 
 async def process_workflow_completion(

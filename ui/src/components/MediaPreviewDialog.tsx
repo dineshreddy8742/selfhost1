@@ -27,7 +27,8 @@ export function MediaPreviewDialog() {
 
     const openPreview = useCallback(
         async (recordingUrl: string | null, transcriptUrl: string | null, runId: number) => {
-            if (!recordingUrl && !transcriptUrl) return;
+            if (!recordingUrl && !transcriptUrl && !runId) return;
+            const effectiveTranscriptKey = transcriptUrl || (runId ? `transcripts/${runId}.txt` : null);
             setMediaLoading(true);
             setAudioSignedUrl(null);
             setTranscriptContent(null);
@@ -38,7 +39,7 @@ export function MediaPreviewDialog() {
 
             const [audioResult, transcriptResult] = await Promise.all([
                 recordingUrl ? getSignedUrl(recordingUrl) : null,
-                transcriptUrl ? getSignedUrl(transcriptUrl, false) : null,
+                effectiveTranscriptKey ? getSignedUrl(effectiveTranscriptKey, false) : null,
             ]);
 
             if (audioResult) {
@@ -52,6 +53,7 @@ export function MediaPreviewDialog() {
                         const text = await response.text();
                         if (!text.trim().startsWith('<?xml') && !text.trim().startsWith('<Error>')) {
                             setTranscriptContent(text);
+                            setTranscriptKey(effectiveTranscriptKey);
                             posthog.capture(PostHogEvent.TRANSCRIPT_VIEWED, {
                                 run_id: runId,
                                 source: 'media_preview_dialog',
