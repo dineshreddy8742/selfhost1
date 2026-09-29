@@ -80,6 +80,32 @@ from pipecat.services.speechmatics.stt import (
     SpeechmaticsSTTService,
     SpeechmaticsSTTSettings,
 )
+
+# Bypass rigid model whitelists so user-configured Sarvam models (e.g. sarvam-30b, saaras:v3, etc.) work without ValueError
+try:
+    SarvamLLMService._validate_model = lambda self, model: None
+    if hasattr(SarvamLLMService, "_SUPPORTED_MODELS"):
+        SarvamLLMService._SUPPORTED_MODELS = frozenset({
+            "sarvam-30b",
+            "sarvam-30b-16k",
+            "sarvam-105b",
+            "sarvam-105b-32k",
+            "sarvam-105b-conversations",
+            "gemma4",
+            "glm5.2",
+        })
+except Exception as e:
+    logger.warning(f"Could not patch SarvamLLMService._validate_model: {e}")
+
+try:
+    SarvamSTTService._validate_model = lambda self, model: None
+except Exception:
+    pass
+
+try:
+    SarvamTTSService._validate_model = lambda self, model: None
+except Exception:
+    pass
 from pipecat.transcriptions.language import Language
 from pipecat.utils.text.xml_function_tag_filter import XMLFunctionTagFilter
 
